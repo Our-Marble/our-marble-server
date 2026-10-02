@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>our-marble-server API</title>
+</head>
+<body>
+<div id="redoc"></div>
+<script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+<script>
+    Redoc.init('/v3/api-docs', {
+        labels: {
+            enum: '가능한 값', default: '기본값', example: '예시',
+            deprecated: '사용 중단', nullable: 'null 허용',
+            responses: '응답', requestSamples: '요청 예시',
+            responseSamples: '응답 예시', download: '다운로드',
+            noResultsFound: '검색 결과 없음'
+        }
+    }, document.getElementById('redoc'));
+</script>
+</body>
+</html>
