@@ -13,17 +13,17 @@ public class InMemoryGameStateRepository implements GameStateRepository {
     private final Map<String, GameState> store = new ConcurrentHashMap<>();
 
     @Override
-    public Optional<GameState> findById(String gameId) {
-        return Optional.ofNullable(store.get(gameId));
+    public Optional<GameState> findById(String roomId) {
+        return Optional.ofNullable(store.get(roomId));
     }
 
     @Override
     public void save(GameState state) {
-        store.put(state.gameId(), state);
+        store.put(state.getRoomId(), state);
     }
 
     @Override
-    public void deleteById(String gameId) {
-        store.remove(gameId);
+    public void deleteById(String roomId) {
+        store.remove(roomId);
     }
 }

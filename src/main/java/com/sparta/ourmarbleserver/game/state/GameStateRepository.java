@@ -10,9 +10,9 @@ import java.util.Optional;
  */
 public interface GameStateRepository {
 
-    Optional<GameState> findById(String gameId);
+    Optional<GameState> findById(String roomId);
 
     void save(GameState state);
 
-    void deleteById(String gameId);
+    void deleteById(String roomId);
 }

@@ -3,7 +3,14 @@ package com.sparta.ourmarbleserver.game.state;
 import java.util.ArrayList;
 import java.util.List;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+
 /** 플레이어 한 명의 게임 중 상태. */
+@Getter
+@Setter
+@RequiredArgsConstructor
 public class PlayerState {
 
     private final long playerId;
@@ -25,60 +32,8 @@ public class PlayerState {
      */
     private int finalRank;
 
-    public PlayerState(long playerId) {
-        this.playerId = playerId;
-    }
-
-    public long playerId() {
-        return playerId;
-    }
-
-    public int position() {
-        return position;
-    }
-
-    public void setPosition(int position) {
-        this.position = position;
-    }
-
-    public long money() {
-        return money;
-    }
-
-    public void setMoney(long money) {
-        this.money = money;
-    }
-
     /** 현금을 delta만큼 더한다. 줄이려면 음수를 넘긴다. */
     public void addMoney(long delta) {
         this.money += delta;
-    }
-
-    public int islandTurnsRemaining() {
-        return islandTurnsRemaining;
-    }
-
-    public void setIslandTurnsRemaining(int islandTurnsRemaining) {
-        this.islandTurnsRemaining = islandTurnsRemaining;
-    }
-
-    public List<Integer> cardIds() {
-        return cardIds;
-    }
-
-    public boolean isBankrupt() {
-        return bankrupt;
-    }
-
-    public void setBankrupt(boolean bankrupt) {
-        this.bankrupt = bankrupt;
-    }
-
-    public int finalRank() {
-        return finalRank;
-    }
-
-    public void setFinalRank(int finalRank) {
-        this.finalRank = finalRank;
     }
 }

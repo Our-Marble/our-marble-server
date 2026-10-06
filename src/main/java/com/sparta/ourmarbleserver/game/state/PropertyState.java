@@ -2,7 +2,14 @@ package com.sparta.ourmarbleserver.game.state;
 
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+
 /** 땅 한 곳의 게임 중 상태. 가격표(고정 데이터)와는 별개로 주인과 건물 단계만 가진다. */
+@Getter
+@Setter
+@RequiredArgsConstructor
 public class PropertyState {
 
     private final int propertyId;
@@ -11,30 +18,6 @@ public class PropertyState {
     private Long ownerId;
 
     private BuildingLevel buildingLevel = BuildingLevel.LAND;
-
-    public PropertyState(int propertyId) {
-        this.propertyId = propertyId;
-    }
-
-    public int propertyId() {
-        return propertyId;
-    }
-
-    public Long ownerId() {
-        return ownerId;
-    }
-
-    public void setOwnerId(Long ownerId) {
-        this.ownerId = ownerId;
-    }
-
-    public BuildingLevel buildingLevel() {
-        return buildingLevel;
-    }
-
-    public void setBuildingLevel(BuildingLevel buildingLevel) {
-        this.buildingLevel = buildingLevel;
-    }
 
     public boolean hasOwner() {
         return ownerId != null;
