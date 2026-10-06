@@ -7,6 +7,8 @@ package com.sparta.ourmarbleserver.global.protocol;
 public enum MessageType {
 
     // ===== GM: 클라 -> 서버 요청 =====
+    ROLL_DICE,
+    CHOOSE_DESTINATION,
     PURCHASE_PROPERTY,
     DECLINE_PROPERTY_PURCHASE,
     BUILD,
@@ -16,6 +18,9 @@ public enum MessageType {
     SELL_PROPERTIES,
 
     // ===== GM: 서버 -> 클라 결과 알림 =====
+    DICE_ROLLED,
+    DESTINATION_CHOSEN,
+    CARD_DRAWN,
     PROPERTY_PURCHASED,
     BUILT,
     TOLL_PAID,
