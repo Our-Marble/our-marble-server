@@ -6,16 +6,14 @@ package com.sparta.ourmarbleserver.global.protocol;
  */
 public enum MessageType {
 
-    // ===== GM: 클라 -> 서버 요청 =====
+    // ===== GM: 클라 -> 서버 요청 (거절은 별도 요청 없이 accept 값으로 보낸다) =====
     ROLL_DICE,
     CHOOSE_DESTINATION,
     PURCHASE_PROPERTY,
-    DECLINE_PROPERTY_PURCHASE,
     BUILD,
-    DECLINE_BUILD,
     ACQUIRE_PROPERTY,
-    DECLINE_ACQUIRE_PROPERTY,
     SELL_PROPERTIES,
+    Draw_Card,
 
     // ===== GM: 서버 -> 클라 결과 알림 =====
     DICE_ROLLED,
