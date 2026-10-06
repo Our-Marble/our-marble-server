@@ -6,22 +6,23 @@ package com.sparta.ourmarbleserver.global.protocol;
  */
 public enum MessageType {
 
-    // ===== GM: 요청과 알림이 같은 type 이름을 쓰는 것 =====
-    ROLL_DICE,            // 요청: 주사위 굴리기 / 알림: 주사위 결과
-    BUILD,                // 요청: 건설·거절 / 알림: 건설·거절 결과
-    DRAW_CARD,            // 요청: 카드 뽑기 / 알림: 뽑은 카드
-
     // ===== GM: 클라 -> 서버 요청 (거절은 별도 요청 없이 isAccept 값으로 보낸다) =====
+    BUILD,
+    DRAW_CARD,
     CHOOSE_DESTINATION,
-    PURCHASE_PROPERTY,
-    ACQUIRE_PROPERTY,
+    ROLL_DICE,
     SELL_PROPERTIES,
+    ACQUIRE_PROPERTY,
+    PURCHASE_PROPERTY,
 
     // ===== GM: 서버 -> 클라 결과 알림 =====
+    BUILT,
+    CARD_DRAWN,
     DESTINATION_CHOSEN,
-    PROPERTY_PURCHASED,
-    PROPERTY_ACQUIRED,
+    DICE_ROLLED,
     PROPERTIES_SOLD,
+    PROPERTY_ACQUIRED,
+    PROPERTY_PURCHASED,
 
     // ===== 공통 =====
     ERROR
