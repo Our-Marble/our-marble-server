@@ -1,0 +1,54 @@
+{
+  "cards": [
+    {
+      "id": 0,
+      "name": "무인도",
+      "description": "무인도로 가라",
+      "effectType": "GoToInspection",
+      "amount": 0,
+      "targetTileId": 0,
+      "steps": 0,
+      "penaltyToFestivalPool": true
+    },
+    {
+      "id": 1,
+      "name": "돈 받기",
+      "description": "돈을 받아라",
+      "effectType": "Bonus",
+      "amount": 2000,
+      "targetTileId": 0,
+      "steps": 0,
+      "penaltyToFestivalPool": false
+    },
+    {
+      "id": 2,
+      "name": "패널티",
+      "description": "돈 뺏기기",
+      "effectType": "Penalty",
+      "amount": 2000,
+      "targetTileId": 0,
+      "steps": 0,
+      "penaltyToFestivalPool": false
+    },
+    {
+      "id": 3,
+      "name": "본사 이동",
+      "description": "본사로 이동",
+      "effectType": "MoveTo",
+      "amount": 0,
+      "targetTileId": 0,
+      "steps": 0,
+      "penaltyToFestivalPool": false
+    },
+    {
+      "id": 4,
+      "name": "칸 이동",
+      "description": "3칸 뒤로 가라",
+      "effectType": "MoveBy",
+      "amount": 0,
+      "targetTileId": 0,
+      "steps": -3,
+      "penaltyToFestivalPool": false
+    }
+  ]
+}
