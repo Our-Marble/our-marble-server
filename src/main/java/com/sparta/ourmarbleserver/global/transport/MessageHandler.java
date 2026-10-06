@@ -15,9 +15,9 @@ public interface MessageHandler {
     /**
      * 요청이 오면 호출된다.
      *
-     * @param gameId   요청이 들어온 방
+     * @param roomId   요청이 들어온 방
      * @param playerId 요청한 플레이어 (접속 시 확인된 값이 들어온다고 가정)
      * @param payload  요청 본문. playerId와 금액은 서버가 채우므로 들어 있지 않다.
      */
-    void handle(String gameId, long playerId, JsonNode payload);
+    void handle(String roomId, long playerId, JsonNode payload);
 }

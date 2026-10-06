@@ -10,8 +10,8 @@ import com.sparta.ourmarbleserver.global.protocol.MessageType;
 public interface EventPublisher {
 
     /** 방의 모든 플레이어에게 보낸다. (결과 알림) */
-    void publishToRoom(String gameId, MessageType type, Object payload);
+    void publishToRoom(String roomId, MessageType type, Object payload);
 
     /** 한 명에게만 보낸다. (ERROR 등) */
-    void sendToPlayer(String gameId, long playerId, MessageType type, Object payload);
+    void sendToPlayer(String roomId, long playerId, MessageType type, Object payload);
 }
