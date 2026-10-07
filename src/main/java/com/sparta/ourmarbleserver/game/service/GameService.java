@@ -10,7 +10,10 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.EventPublisher;
 import com.sparta.ourmarbleserver.global.transport.MessageHandler;
+import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
+import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
+import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
@@ -58,7 +61,8 @@ public class GameService implements MessageHandler {
 
     @Override
     public Set<MessageType> types() {
-        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES);
+        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
+                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY);
     }
 
     @Override
@@ -67,6 +71,8 @@ public class GameService implements MessageHandler {
             case ROLL_DICE -> rollDice(roomId,playerId);
             case PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
+            case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
+            case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -206,6 +212,79 @@ public class GameService implements MessageHandler {
         }
         return property;
     }
+
+    // ===== 건설 / 거절 =====
+
+    /**
+     * 내 땅에 도착했을 때 한 단계 건설하거나 거절한다. 어느 쪽이든 BUILT를 방 전원에게 보내고 턴을 끝낸다.
+     * 건설 검증: 내 땅(NOT_OWNER) → 건설 가능 땅(CANNOT_BUILD) → 호텔 아님(MAX_LEVEL) → 현금 ≥ 건설비(NOT_ENOUGH_MONEY).
+     * 건물은 한 단계씩 올라가고 건설비는 올라갈 단계의 비용이다. 거절은 상태 변화 없이 isAccept=false로 알린다.
+     */
+    public void build(String roomId, long playerId, int propertyId, boolean isAccept) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_BUILD, propertyId);
+        PlayerState player = state.getPlayerState(playerId);
+        requireStandingOn(player, propertyId);
+
+        if(isAccept) {
+            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
+            if (!property.isOwnedBy(playerId)) {
+                throw new GameException(ErrorCode.NOT_OWNER);
+            }
+            if (!propertyService.canBuild(propertyId)) {
+                throw new GameException(ErrorCode.CANNOT_BUILD);
+            }
+            if (property.getBuildingLevel() == BuildingLevel.HOTEL) {
+                throw new GameException(ErrorCode.MAX_LEVEL);
+            }
+            BuildingLevel nextLevel = BuildingLevel.fromIndex(property.getBuildingLevel().index() + 1);
+            long cost = propertyService.getBuildCost(propertyId, nextLevel);
+            if (player.getMoney() < cost) {
+                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            }
+
+            economyService.charge(player, cost);
+            property.setBuildingLevel(nextLevel);
+        }
+
+        publisher.publishToRoom(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
+        turnService.endTurn(state);
+
+        repository.save(state);
+    }
+
+    // ===== 인수 / 거절 =====
+
+    /**
+     * 통행료를 낸 뒤 남의 땅을 인수하거나 거절한다. 어느 쪽이든 PROPERTY_ACQUIRED를 방 전원에게 보내고 턴을 끝낸다.
+     * 인수 검증: 남의 땅(CANNOT_ACQUIRE) → 현금 ≥ 인수가(NOT_ENOUGH_MONEY). 인수가는 이전 주인에게 이체하고
+     * 건물 단계는 그대로 둔 채 주인만 바꾼다. 거절은 상태 변화 없이 isAccept=false로 알린다.
+     */
+    public void acquireProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_ACQUIRE, propertyId);
+        PlayerState player = state.getPlayerState(playerId);
+        requireStandingOn(player, propertyId);
+
+        if(isAccept) {
+            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
+            if (!property.hasOwner() || property.isOwnedBy(playerId)) {
+                throw new GameException(ErrorCode.CANNOT_ACQUIRE);
+            }
+            long price = propertyService.getAcquireValue(property);
+            if (player.getMoney() < price) {
+                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            }
+
+            economyService.transfer(player, state.getPlayerState(property.getOwnerId()), price); // 주인이 바뀌기 전에 이체
+            property.setOwnerId(playerId);
+        }
+
+        publisher.publishToRoom(roomId, MessageType.PROPERTY_ACQUIRED,
+                new PropertyAcquiredPayload(playerId, propertyId, isAccept));
+        turnService.endTurn(state);
+
+        repository.save(state);
+    }
+
 
 
     // ===== 도착 칸 처리 =====

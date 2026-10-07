@@ -78,4 +78,11 @@ class PropertyServiceTest {
         assertThat(service.getTotalAsset(state, 1L)).isEqualTo(530000);
         assertThat(service.getTotalSellValue(state, 1L)).isEqualTo(215000);
     }
+
+    @Test
+    void 건설_가능_땅인지_알려_준다() {
+        assertThat(service.canBuild(101)).isTrue();
+        assertThat(service.canBuild(104)).isFalse();   // 독도
+        assertThat(service.canBuild(999)).isFalse();
+    }
 }

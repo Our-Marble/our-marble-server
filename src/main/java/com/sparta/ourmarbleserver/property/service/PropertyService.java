@@ -35,6 +35,12 @@ public class PropertyService {
         return data == null ? 0 : data.landPrice();
     }
 
+    /** 건설할 수 있는 땅인지. 가격표에 없거나 건설 불가 땅(독도 등)이면 false */
+    public boolean canBuild(int propertyId) {
+        PropertyData data = prices.get(propertyId);
+        return data != null && data.canBuild();
+    }
+
     /** targetLevel까지 "한 단계" 짓는 비용 (누적 아님). 땅 단계이거나 건설 불가 땅이면 0 */
     public long getBuildCost(int propertyId, BuildingLevel targetLevel) {
         PropertyData data = prices.get(propertyId);
