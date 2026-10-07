@@ -18,4 +18,9 @@ public class EconomyService {
         player.addMoney(SALARY_AMOUNT);
         return SALARY_AMOUNT;
     }
+
+    /** 비용(땅값 등)을 현금에서 뺀다. 잔액이 충분한지는 호출하는 쪽이 먼저 확인한다. */
+    public void charge(PlayerState player, long amount) {
+        player.addMoney(-amount);
+    }
 }

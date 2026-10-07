@@ -9,6 +9,7 @@ import java.util.Queue;
 import java.util.Random;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.game.dto.DiceRolledPayload;
@@ -50,7 +51,7 @@ class GameServiceTest {
     private GameService newService(int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), data);
+                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
         return service;
     }
@@ -134,7 +135,7 @@ class GameServiceTest {
     void handle로도_ROLL_DICE를_처리한다() {
         GameService service = newService(1, 2);
 
-        assertThat(service.types()).containsExactly(MessageType.ROLL_DICE);
+        assertThat(service.types()).contains(MessageType.ROLL_DICE);
         service.handle(MessageType.ROLL_DICE, ROOM, 1L, null);
 
         assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);

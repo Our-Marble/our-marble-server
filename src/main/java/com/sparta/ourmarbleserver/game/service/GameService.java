@@ -10,10 +10,11 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.EventPublisher;
 import com.sparta.ourmarbleserver.global.transport.MessageHandler;
+import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
+import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -33,17 +34,19 @@ public class GameService implements MessageHandler {
     private final MoveService moveService;
     private final TurnService turnService;
     private final EconomyService economyService;
+    private final PropertyService propertyService;
     private final GameDataService gameDataService;
     private final List<TileData> tiles;
 
     public GameService(GameStateRepository repository, EventPublisher publisher, DiceService diceService,
-                       MoveService moveService, TurnService turnService,EconomyService economyService, GameDataService gameDataService) {
+                       MoveService moveService, TurnService turnService,EconomyService economyService, PropertyService propertyService, GameDataService gameDataService) {
         this.repository = repository;
         this.publisher = publisher;
         this.diceService = diceService;
         this.moveService = moveService;
         this.turnService = turnService;
         this.economyService = economyService;
+        this.propertyService = propertyService;
         this.gameDataService = gameDataService;
         this.tiles = gameDataService.getTiles();
     }
@@ -52,13 +55,14 @@ public class GameService implements MessageHandler {
 
     @Override
     public Set<MessageType> types() {
-        return Set.of(MessageType.ROLL_DICE);
+        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY);
     }
 
     @Override
     public void handle(MessageType type, String roomId, long playerId, JsonNode payload) {
         switch (type) {
             case ROLL_DICE -> rollDice(roomId,playerId);
+            case  PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -108,6 +112,39 @@ public class GameService implements MessageHandler {
         repository.save(state);
     }
 
+    // ===== 땅 구매 / 거절 =====
+
+    /**
+     * 도착한 빈 땅을 사거나 거절한다. 어느 쪽이든 PROPERTY_PURCHASED를 방 전원에게 보내고 턴을 끝낸다.
+     * 구매: 빈 땅 → 현금 확인 → 땅값 차감 → 주인 등록. 거절은 상태 변화 없이 isAccept=false로 알린다.
+     */
+
+    public void purchaseProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_PURCHASE, propertyId);
+        PlayerState player = state.getPlayerState(playerId);
+        requireStandingOn(player, propertyId);
+
+        if(isAccept) {
+            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
+            if(property.hasOwner()) {
+                throw new GameException(ErrorCode.ALREADY_OWNED);
+            }
+            long price = propertyService.getLandPrice(propertyId);
+            if(player.getMoney() < price) {
+                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            }
+
+            economyService.charge(player, price);
+            property.setOwnerId(playerId);
+        }
+
+        publisher.publishToRoom(roomId, MessageType.PROPERTY_PURCHASED,
+                new PropertyPurchasedPayload(playerId, propertyId, isAccept));
+        turnService.endTurn(state);
+
+        repository.save(state);
+    }
+
     // ===== 도착 칸 처리 =====
 
     private void processArrival(GameState state, PlayerState player) {
@@ -136,17 +173,45 @@ public class GameService implements MessageHandler {
         }
     }
 
+    // ===== 요청 본문 읽기 =====
+
+    /** payload에서 propertyId를 읽는다. 없거나 숫자가 아니면 올바르지 않은 땅으로 거부한다. */
+
+    private static int requirePropertyId(JsonNode payload) {
+        JsonNode node = payload == null ? null : payload.get("propertyId");
+        if(node == null || !node.isNumber()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+        return node.intValue();
+    }
+
+    /** payload에서 isAccept를 읽는다. 빠졌으면 실수로 사거나 거절하지 않도록 거부한다. */
+    private static boolean requireAccept (JsonNode payload) {
+        JsonNode node = payload == null ? null : payload.get("isAccept");
+        if(node == null || !node.isBoolean()) {
+            throw new GameException(ErrorCode.INVALID_STATE);
+        }
+        return node.booleanValue();
+    }
+
     // ===== 공통 검증 =====
+
+    private GameState validate(String roomId, long playerId, TurnPhase requiredPhase) {
+        return validate(roomId, playerId, requiredPhase, null);
+    }
 
     /**
      * 모든 요청의 공통 검증: 방 존재 → 게임 진행 중 → 내 차례 → 파산 여부 → 요청이 현재 phase에 맞는지.
      * 상태를 바꾸기 전에 호출하므로 실패해도 상태는 그대로다.
      */
-    private GameState validate(String roomId, long playerId, TurnPhase requiredPhase) {
+    private GameState validate(String roomId, long playerId, TurnPhase requiredPhase, Integer propertyId) {
         GameState state = repository.findById(roomId)
                 .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
         if (state.isGameOver()) {
             throw new GameException(ErrorCode.INVALID_STATE);
+        }
+        if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
         if (state.getCurrentPlayerId() != playerId) {
             throw new GameException(ErrorCode.NOT_YOUR_TURN);
@@ -160,9 +225,12 @@ public class GameService implements MessageHandler {
         return state;
     }
 
-
-
-
-
+    /** 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다. */
+    private void requireStandingOn (PlayerState player, int propertyId) {
+        TileData tile = tiles.get(player.getPosition());
+        if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+    }
 
 }
