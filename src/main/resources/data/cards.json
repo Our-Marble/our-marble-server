@@ -15,7 +15,7 @@
       "name": "돈 받기",
       "description": "돈을 받아라",
       "effectType": "Bonus",
-      "amount": 2000,
+      "amount": 200,
       "targetTileId": 0,
       "steps": 0,
       "penaltyToFestivalPool": false
@@ -25,7 +25,7 @@
       "name": "패널티",
       "description": "돈 뺏기기",
       "effectType": "Penalty",
-      "amount": 2000,
+      "amount": 200,
       "targetTileId": 0,
       "steps": 0,
       "penaltyToFestivalPool": false

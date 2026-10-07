@@ -1,0 +1,37 @@
+package com.sparta.ourmarbleserver.economy.service;
+
+
+import com.sparta.ourmarbleserver.game.state.PlayerState;
+import org.springframework.stereotype.Service;
+
+/**
+ * 현금이 오가는 경제 규칙을 모은다. 상태만 바꾸고, 알림 전송과 저장은 GameService가 한다.
+ * 월급, 비용 차감, 현금 이체가 있고, 세무조사, 적립금은 이후 단계에서 추가한다.
+ */
+@Service
+public class EconomyService {
+    /** 월급 (출발 지점을 지나면 지급) */
+    public static final long SALARY_AMOUNT = 100_000;
+
+    /** 월급을 현금에 더한다. 지급한 금액을 돌려준다. */
+    public long paySalary(PlayerState player) {
+        player.addMoney(SALARY_AMOUNT);
+        return SALARY_AMOUNT;
+    }
+
+    /** 비용(땅값 등)을 현금에서 뺀다. 잔액이 충분한지는 호출하는 쪽이 먼저 확인한다. */
+    public void charge(PlayerState player, long amount) {
+        player.addMoney(-amount);
+    }
+
+    /** 은행에서 현금을 받는다. (땅 매각 대금 등) */
+    public void deposit(PlayerState player, long amount) {
+        player.addMoney(amount);
+    }
+
+    /** payer의 현금을 amount만큼 receiver에게 옮긴다. 잔액이 충분한지는 호출하는 쪽이 먼저 확인한다. */
+    public void transfer(PlayerState payer, PlayerState receiver, long amount) {
+        payer.addMoney(-amount);
+        receiver.addMoney(amount);
+    }
+}
