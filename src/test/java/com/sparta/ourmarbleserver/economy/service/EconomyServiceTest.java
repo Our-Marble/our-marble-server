@@ -31,4 +31,17 @@ class EconomyServiceTest {
 
         assertThat(player.getMoney()).isEqualTo(2 * EconomyService.SALARY_AMOUNT);
     }
+
+    @Test
+    void 현금을_이체한다() {
+        PlayerState payer = new PlayerState(1L);
+        payer.setMoney(500_000);
+        PlayerState receiver = new PlayerState(2L);
+        receiver.setMoney(500_000);
+
+        service.transfer(payer, receiver, 20_000);
+
+        assertThat(payer.getMoney()).isEqualTo(480_000);
+        assertThat(receiver.getMoney()).isEqualTo(520_000);
+    }
 }

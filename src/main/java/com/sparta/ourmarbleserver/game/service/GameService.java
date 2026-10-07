@@ -21,7 +21,7 @@ import java.util.Set;
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 현재 처리하는 요청: ROLL_DICE. 나머지 요청은 단계별로 추가한다.
+ * 현재 처리하는 요청: OLL_DICE, PURCHASE_PROPERTY로, EconomyService. 나머지 요청은 단계별로 추가한다.
  */
 @Service
 public class GameService implements MessageHandler {
@@ -168,7 +168,31 @@ public class GameService implements MessageHandler {
         } else if (property.isOwnedBy(player.getPlayerId())) {
             state.setPhase(TurnPhase.AWAITING_BUILD);
         } else {
-            //TODO(경제): 통행료 정산 -> 인수 선택 / 매각 / 파산. 그때까지는 턴만 넘긴다.
+            settleToll(state,player,property);
+        }
+    }
+
+    // ===== 통행료 정산 =====
+
+    /**
+     * 남의 땅에 도착했을 때 통행료를 내고, 인수할 수 있는지에 따라 다음 phase를 정한다.
+     * 통행료와 현금 이체는 알림 없이 서버 내부에서만 처리한다. (클라가 같은 규칙으로 계산)
+     * 통행료를 내고도 현금 ≥ 인수가이면 인수 선택을 기다리고, 아니면 턴을 끝낸다.
+     */
+    private void settleToll(GameState state, PlayerState payer, PropertyState property) {
+        long toll = propertyService.getToll(property);
+        if (payer.getMoney() < toll) {
+            //TODO(경제): 현금부족 -> 매각(AWAITING_SELL) 또는 파산. 그때까지 턴만 넘긴다.
+            turnService.endTurn(state);
+            return;
+        }
+
+        PlayerState owner = state.getPlayerState(property.getOwnerId());
+        economyService.transfer(payer, owner, toll);
+
+        if (payer.getMoney() >= propertyService.getAcquireValue(property)) {
+            state.setPhase(TurnPhase.AWAITING_ACQUIRE);
+        } else {
             turnService.endTurn(state);
         }
     }
