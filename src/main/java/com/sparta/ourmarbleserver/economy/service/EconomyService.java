@@ -24,6 +24,11 @@ public class EconomyService {
         player.addMoney(-amount);
     }
 
+    /** 은행에서 현금을 받는다. (땅 매각 대금 등) */
+    public void deposit(PlayerState player, long amount) {
+        player.addMoney(amount);
+    }
+
     /** payer의 현금을 amount만큼 receiver에게 옮긴다. 잔액이 충분한지는 호출하는 쪽이 먼저 확인한다. */
     public void transfer(PlayerState payer, PlayerState receiver, long amount) {
         payer.addMoney(-amount);

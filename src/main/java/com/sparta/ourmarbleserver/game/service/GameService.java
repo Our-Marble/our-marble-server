@@ -10,11 +10,14 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.EventPublisher;
 import com.sparta.ourmarbleserver.global.transport.MessageHandler;
+import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -55,14 +58,15 @@ public class GameService implements MessageHandler {
 
     @Override
     public Set<MessageType> types() {
-        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY);
+        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES);
     }
 
     @Override
     public void handle(MessageType type, String roomId, long playerId, JsonNode payload) {
         switch (type) {
             case ROLL_DICE -> rollDice(roomId,playerId);
-            case  PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
+            case PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
+            case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -145,6 +149,65 @@ public class GameService implements MessageHandler {
         repository.save(state);
     }
 
+    // ===== 땅 매각 =====
+
+    /**
+     * 통행료가 모자랄 때 땅을 팔아 현금을 채우고 통행료를 낸다. 매각 뒤에는 인수 선택 없이 턴을 끝낸다.
+     * 검증 순서: 목록이 비었거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
+     * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
+     */
+    public void sellProperties(String roomId, long playerId, List<Integer> propertyIds) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_SELL);
+        PlayerState payer = state.getPlayerState(playerId);
+
+        if (propertyIds.isEmpty() || new HashSet<>(propertyIds).size() != propertyIds.size()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
+        }
+        List<PropertyState> selected = new ArrayList<>();
+        for (int propertyId : propertyIds) {
+            PropertyState property = state.getPropertyState(propertyId)
+                    .orElseThrow(() -> new GameException(ErrorCode.INVALID_PROPERTY));
+            if (!property.isOwnedBy(playerId)) {
+                throw new GameException(ErrorCode.NOT_OWNER);
+            }
+            selected.add(property);
+        }
+
+        PropertyState tollProperty = findTollProperty(state, payer);
+        long toll = propertyService.getToll(tollProperty);
+        long proceeds = selected.stream().mapToLong(propertyService::getSellValue).sum();
+        if (payer.getMoney() + proceeds < toll) {
+            throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
+        }
+
+        // 검증이 모두 끝났으니 상태를 바꾼다,
+        selected.forEach(PropertyState::reset);
+        economyService.deposit(payer, proceeds);
+        economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
+
+
+        publisher.publishToRoom(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
+        turnService.endTurn(state);
+
+        repository.save(state);
+
+    }
+
+    /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
+    private PropertyState findTollProperty(GameState state, PlayerState payer) {
+        TileData tile = tiles.get(payer.getPosition());
+        if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
+            throw new GameException(ErrorCode.INVALID_STATE);
+        }
+        PropertyState property = state.getPropertyState(tile.propertyId())
+                .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        if (!property.hasOwner() || property.isOwnedBy(payer.getPlayerId())) {
+            throw new GameException(ErrorCode.INVALID_STATE);
+        }
+        return property;
+    }
+
+
     // ===== 도착 칸 처리 =====
 
     private void processArrival(GameState state, PlayerState player) {
@@ -215,12 +278,29 @@ public class GameService implements MessageHandler {
     }
 
     /** payload에서 isAccept를 읽는다. 빠졌으면 실수로 사거나 거절하지 않도록 거부한다. */
-    private static boolean requireAccept (JsonNode payload) {
+    private static boolean requireAccept(JsonNode payload) {
         JsonNode node = payload == null ? null : payload.get("isAccept");
         if(node == null || !node.isBoolean()) {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
         return node.booleanValue();
+    }
+
+    /** payload에서 propertyIds를 읽는다. 없거나 배열이 아니거나 숫자가 아닌 값이 있으면 목록 오류로 거부한다. */
+    private static List<Integer> requirePropertyIds(JsonNode payload) {
+        JsonNode node = payload == null ? null : payload.get("propertyIds");
+        if (node == null || !node.isArray()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
+        }
+        List<Integer> propertyIds = new ArrayList<>();
+        for (int i = 0; i < node.size(); ++i) {
+            JsonNode element = node.get(i);
+            if (!element.isNumber()) {
+                throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
+            }
+            propertyIds.add(element.intValue());
+        }
+        return propertyIds;
     }
 
     // ===== 공통 검증 =====
