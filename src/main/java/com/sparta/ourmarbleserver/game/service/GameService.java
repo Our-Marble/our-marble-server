@@ -16,6 +16,7 @@ import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
@@ -30,6 +31,7 @@ import java.util.Set;
  * 현재 처리하는 요청: OLL_DICE, PURCHASE_PROPERTY로, EconomyService. 나머지 요청은 단계별로 추가한다.
  */
 @Service
+@RequiredArgsConstructor
 public class GameService implements MessageHandler {
 
     /** 초기 자금 */
@@ -42,20 +44,6 @@ public class GameService implements MessageHandler {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
-    private final List<TileData> tiles;
-
-    public GameService(GameStateRepository repository, EventPublisher publisher, DiceService diceService,
-                       MoveService moveService, TurnService turnService,EconomyService economyService, PropertyService propertyService, GameDataService gameDataService) {
-        this.repository = repository;
-        this.publisher = publisher;
-        this.diceService = diceService;
-        this.moveService = moveService;
-        this.turnService = turnService;
-        this.economyService = economyService;
-        this.propertyService = propertyService;
-        this.gameDataService = gameDataService;
-        this.tiles = gameDataService.getTiles();
-    }
 
     // ==== 요청 받기 ====
 
@@ -201,7 +189,7 @@ public class GameService implements MessageHandler {
 
     /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
     private PropertyState findTollProperty(GameState state, PlayerState payer) {
-        TileData tile = tiles.get(payer.getPosition());
+        TileData tile = tileAt(payer.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
@@ -290,7 +278,7 @@ public class GameService implements MessageHandler {
     // ===== 도착 칸 처리 =====
 
     private void processArrival(GameState state, PlayerState player) {
-        TileData tile = tiles.get(player.getPosition());
+        TileData tile = tileAt(player.getPosition());
         switch (tile.type()) {
             case "PROPERTY" -> arriveAtProperty(state, player, tile.propertyId());
             case "GOLDEN_KEY" -> state.setPhase(TurnPhase.AWAITING_DRAW_CARD);
@@ -444,11 +432,14 @@ public class GameService implements MessageHandler {
     }
 
     /** 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다. */
-    private void requireStandingOn (PlayerState player, int propertyId) {
-        TileData tile = tiles.get(player.getPosition());
+    private void requireStandingOn(PlayerState player, int propertyId) {
+        TileData tile = tileAt(player.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
+    }
+    private TileData tileAt(int position) {
+        return gameDataService.getTiles().get(position);
     }
 
 }

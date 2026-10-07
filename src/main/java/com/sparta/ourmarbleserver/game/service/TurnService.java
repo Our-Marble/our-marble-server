@@ -1,9 +1,9 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import com.sparta.ourmarbleserver.game.dto.TileData;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,16 +13,13 @@ import java.util.List;
  * 상태만 바꾸고, 알림 전송과 저장은 GameService가 한다. 게임이 끝나면 state.isGameOver()가 true가 된다.
  */
 @Service
+@RequiredArgsConstructor
 public class TurnService {
     /** 최대 라운드. 이 라운드를 넘기면 게임이 끝난다. */
     public static final int MAX_ROUND = 30;
     private static final String WORLD_TRAVEL = "WORLD_TRAVEL";
 
-    private final List<TileData> tiles;
-
-    public TurnService(GameDataService gameDataService) {
-        this.tiles = gameDataService.getTiles();
-    }
+    private final GameDataService gameDataService;
 
     /** 턴 종료. 더블이면 같은 플레이어가 다시 굴리고, 아니면 다음 플레이어로 넘어간다. (클라 ProcessEndTurn) */
     public void endTurn(GameState state) {
@@ -116,6 +113,6 @@ public class TurnService {
     }
 
     private boolean isOnWorldTravel(PlayerState player) {
-        return WORLD_TRAVEL.equals(tiles.get(player.getPosition()).type());
+        return WORLD_TRAVEL.equals(gameDataService.getTiles().get(player.getPosition()).type());
     }
 }
