@@ -1,4 +1,4 @@
-package com.sparta.ourmarbleserver.property;
+package com.sparta.ourmarbleserver.property.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
