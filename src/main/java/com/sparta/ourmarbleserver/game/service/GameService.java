@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.game.service;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.dto.DestinationChosenPayload;
 import com.sparta.ourmarbleserver.game.dto.DiceRolledPayload;
 import com.sparta.ourmarbleserver.game.dto.PropertyData;
 import com.sparta.ourmarbleserver.game.dto.TileData;
@@ -50,7 +51,7 @@ public class GameService implements MessageHandler {
     @Override
     public Set<MessageType> types() {
         return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
-                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY);
+                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION);
     }
 
     @Override
@@ -61,6 +62,7 @@ public class GameService implements MessageHandler {
             case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
             case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
+            case CHOOSE_DESTINATION -> chooseDestination(roomId,playerId,requireDestination(payload));
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -80,7 +82,7 @@ public class GameService implements MessageHandler {
             state.addProperty(new PropertyState(data.id()));
         }
 
-        turnService.startTurn(state, playerIds.get(0));
+        turnService.startTurn(state, playerIds.getFirst());
         repository.save(state);
         return state;
     }
@@ -273,7 +275,28 @@ public class GameService implements MessageHandler {
         repository.save(state);
     }
 
+    // ===== 세계여행 =====
 
+    /**
+     * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
+     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
+     */
+    public void chooseDestination(String roomId, long playerId, int destinationPosition) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DESTINATION);
+        PlayerState player = state.getPlayerState(playerId);
+
+        if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+
+        publisher.publishToRoom(roomId, MessageType.DESTINATION_CHOSEN,
+                new DestinationChosenPayload(playerId, destinationPosition));
+
+        moveService.moveDirectly(player, destinationPosition);
+        processArrival(state, player);
+
+        repository.save(state);
+    }
 
     // ===== 도착 칸 처리 =====
 
@@ -291,8 +314,9 @@ public class GameService implements MessageHandler {
                 economyService.payTax(state, player, EconomyService.TAX_AMOUNT);
                 turnService.endTurn(state);
             }
+            case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
 
-            // TODO(특수칸): 무인도, 세계여행. 그때까지는 턴만 넘긴다.
+            // TODO(특수칸): 무인도. 그때까지는 턴만 넘긴다.
 
             default -> turnService.endTurn(state);
         }
@@ -398,6 +422,15 @@ public class GameService implements MessageHandler {
             propertyIds.add(element.intValue());
         }
         return propertyIds;
+    }
+
+    /** payload에서 destinationPosition을 읽는다. 없거나 숫자가 아니면 올바르지 않은 칸으로 거부한다. */
+    private static int requireDestination(JsonNode payload) {
+        JsonNode node = payload == null ? null : payload.get("destinationPosition");
+        if (node == null || !node.isNumber()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+        return node.intValue();
     }
 
     // ===== 공통 검증 =====
