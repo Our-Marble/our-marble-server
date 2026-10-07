@@ -40,6 +40,7 @@ public enum MessageType {
     ROOM_LIST,         // 본인에게: 방 목록 전체 (로비 진입 시 자동 + 새로고침 응답)
     ROOM_ENTERED,      // 본인에게: 방 생성·입장 성공 (대기창 전환 신호)
     ROOM_UPDATED,      // lobby/room/{id} 전원: 인원·방장 변경
+    CONNECTED,
 
     // ===== 로비 -> 게임 전환: 서버 -> 클라 알림 (topic: GAME) =====
     GAME_STARTED       // game/room/{id} 전원: 게임창 전환 신호
