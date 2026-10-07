@@ -20,7 +20,17 @@ public enum ErrorCode {
     CANNOT_ACQUIRE("인수할 수 없는 땅입니다."),
     NOT_ENOUGH_SELL("선택한 땅을 팔아도 통행료가 부족합니다."),
     PLAYER_BANKRUPT("파산한 플레이어입니다."),
-    INVALID_PROPERTY_LIST("매각할 땅 목록이 올바르지 않습니다.");
+    INVALID_PROPERTY_LIST("매각할 땅 목록이 올바르지 않습니다."),
+
+    // 로비
+    ROOM_NOT_FOUND("방을 찾을 수 없습니다."),
+    ROOM_FULL("방이 가득 찼습니다."),
+    ALREADY_IN_ROOM("이미 방에 참가 중입니다."),
+    NOT_IN_ROOM("방에 참가하지 않았습니다."),
+    NOT_HOST("방장만 할 수 있습니다."),
+    ROOM_ALREADY_STARTED("이미 시작한 방입니다."),
+    NOT_ENOUGH_PLAYERS("최소 2명이 필요합니다."),
+    NOT_ALL_READY("모두 준비해야 시작할 수 있습니다.");
 
     private final String message;
 
