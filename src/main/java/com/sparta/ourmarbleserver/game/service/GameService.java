@@ -182,8 +182,13 @@ public class GameService implements MessageHandler {
     private void settleToll(GameState state, PlayerState payer, PropertyState property) {
         long toll = propertyService.getToll(property);
         if (payer.getMoney() < toll) {
-            //TODO(경제): 현금부족 -> 매각(AWAITING_SELL) 또는 파산. 그때까지 턴만 넘긴다.
-            turnService.endTurn(state);
+            long sellable = propertyService.getTotalSellValue(state, payer.getPlayerId());
+            if (payer.getMoney() + sellable >= toll) {
+                state.setPhase(TurnPhase.AWAITING_SELL);
+            } else {
+                //TODO(경제): 현금부족 -> 전부 팔아도 부족 -> 파산. 그때까지는 턴만 넘긴다.
+                turnService.endTurn(state);
+            }
             return;
         }
 

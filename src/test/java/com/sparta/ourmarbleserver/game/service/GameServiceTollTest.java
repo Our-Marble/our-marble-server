@@ -128,6 +128,31 @@ class GameServiceTollTest {
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
     }
 
+    @Test
+    void 현금이_모자라도_전체_매각으로_메울_수_있으면_매각을_기다린다() {
+        GameService service = newService();
+        long toll = propertyService.getToll(property());
+        state().getPlayerState(1L).setMoney(toll - 1);
+        state().getPropertyState(101).orElseThrow().setOwnerId(1L);   // 매각가가 통행료를 메우고도 남는 땅
+
+        service.rollDice(ROOM, 1L);
+
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_SELL);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
+        assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(toll - 1);   // 통행료는 아직 안 냄
+        assertThat(state().getPlayerState(2L).getMoney()).isEqualTo(GameService.START_MONEY);
+    }
+
+    @Test
+    void 전부_팔아도_통행료에_못_미치면_매각을_기다리지_않는다() {
+        GameService service = newService();
+        state().getPlayerState(1L).setMoney(0);   // 가진 땅도 없다
+
+        service.rollDice(ROOM, 1L);
+
+        assertThat(state().getPhase()).isNotEqualTo(TurnPhase.AWAITING_SELL);
+    }
+
     /** 같은 땅의 건물 없는 상태 (비교용) */
     private PropertyState landLevelCopy() {
         PropertyState copy = new PropertyState(PROPERTY_ID);
