@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.economy.service;
 
 
+import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +13,9 @@ import org.springframework.stereotype.Service;
 public class EconomyService {
     /** 월급 (출발 지점을 지나면 지급) */
     public static final long SALARY_AMOUNT = 100_000;
+
+    /** 세무조사 세금 (세무조사 칸에 도착하면 부과, 적립금에 쌓임) */
+    public static final long TAX_AMOUNT = 100_000;
 
     /** 월급을 현금에 더한다. 지급한 금액을 돌려준다. */
     public long paySalary(PlayerState player) {
@@ -33,5 +37,27 @@ public class EconomyService {
     public void transfer(PlayerState payer, PlayerState receiver, long amount) {
         payer.addMoney(-amount);
         receiver.addMoney(amount);
+    }
+
+    /**
+     * 세금(벌금)을 현금 한도 안에서만 걷어 적립금에 쌓는다. 매각이나 파산은 없다.
+     * 실제로 낸 금액을 돌려준다. (예: 세금 100,000인데 현금 30,000이면 30,000만 냄)
+     */
+    public long payTax(GameState state, PlayerState player, long amount) {
+        long paid = Math.min(amount, Math.max(0, player.getMoney()));
+        player.addMoney(-paid);
+        state.setWelfareFund(state.getWelfareFund() + paid);
+        return paid;
+    }
+
+    /** 쌓인 적립금 전액을 받는다. 받은 금액을 돌려주고 적립금은 0이 된다. */
+    public long receiveWelfareFund(GameState state, PlayerState player) {
+        long amount = state.getWelfareFund();
+        if (amount <= 0) {
+            return 0;
+        }
+        player.addMoney(amount);
+        state.setWelfareFund(0);
+        return amount;
     }
 }

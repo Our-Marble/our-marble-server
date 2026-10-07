@@ -294,8 +294,17 @@ public class GameService implements MessageHandler {
         switch (tile.type()) {
             case "PROPERTY" -> arriveAtProperty(state, player, tile.propertyId());
             case "GOLDEN_KEY" -> state.setPhase(TurnPhase.AWAITING_DRAW_CARD);
+            case "START" -> turnService.endTurn(state); //효과 없음(월급은 이동할 때 이미 지급됨)
+            case "CHARITY" -> {
+                economyService.receiveWelfareFund(state, player);
+                turnService.endTurn(state);
+            }
+            case "DONATION" -> {
+                economyService.payTax(state, player, EconomyService.TAX_AMOUNT);
+                turnService.endTurn(state);
+            }
 
-            // TODO(특수칸): 출발(효과없음), 무인도, 기부금 수령(적립금), 세무조사, 세계여행, 그때까지만 턴만 넘긴다.
+            // TODO(특수칸): 무인도, 세계여행. 그때까지는 턴만 넘긴다.
 
             default -> turnService.endTurn(state);
         }

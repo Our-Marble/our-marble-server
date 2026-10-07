@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.economy.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sparta.ourmarbleserver.game.state.GameState;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
@@ -43,5 +44,64 @@ class EconomyServiceTest {
 
         assertThat(payer.getMoney()).isEqualTo(480_000);
         assertThat(receiver.getMoney()).isEqualTo(520_000);
+    }
+
+    @Test
+    void 세금은_적립금에_쌓이고_낸_금액을_돌려준다() {
+        GameState state = new GameState("r1");
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(500_000);
+
+        long paid = service.payTax(state, player, 100_000);
+
+        assertThat(paid).isEqualTo(100_000);
+        assertThat(player.getMoney()).isEqualTo(400_000);
+        assertThat(state.getWelfareFund()).isEqualTo(100_000);
+    }
+
+    @Test
+    void 현금이_세금보다_적으면_가진_만큼만_낸다() {
+        GameState state = new GameState("r1");
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(30_000);
+
+        long paid = service.payTax(state, player, 100_000);
+
+        assertThat(paid).isEqualTo(30_000);
+        assertThat(player.getMoney()).isZero();
+        assertThat(state.getWelfareFund()).isEqualTo(30_000);
+    }
+
+    @Test
+    void 현금이_없으면_세금을_내지_않는다() {
+        GameState state = new GameState("r1");
+        PlayerState player = new PlayerState(1L);
+
+        assertThat(service.payTax(state, player, 100_000)).isZero();
+        assertThat(state.getWelfareFund()).isZero();
+    }
+
+    @Test
+    void 적립금_전액을_받으면_적립금은_0이_된다() {
+        GameState state = new GameState("r1");
+        state.setWelfareFund(250_000);
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(100_000);
+
+        long received = service.receiveWelfareFund(state, player);
+
+        assertThat(received).isEqualTo(250_000);
+        assertThat(player.getMoney()).isEqualTo(350_000);
+        assertThat(state.getWelfareFund()).isZero();
+    }
+
+    @Test
+    void 적립금이_없으면_받는_금액은_0이다() {
+        GameState state = new GameState("r1");
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(100_000);
+
+        assertThat(service.receiveWelfareFund(state, player)).isZero();
+        assertThat(player.getMoney()).isEqualTo(100_000);
     }
 }
