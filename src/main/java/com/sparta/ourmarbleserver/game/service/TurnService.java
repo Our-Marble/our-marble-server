@@ -87,6 +87,23 @@ public class TurnService {
         return alive <= 1;
     }
 
+    /**
+     * 플레이어를 파산 처리한다. 최종 등수는 파산하는 시점의 생존자 수다. (4명 중 첫 파산 → 4위)
+     * 살아 있는 플레이어가 1명이면 게임 종료로 표시한다. 이미 파산한 플레이어는 다시 처리하지 않는다.
+     */
+    public void eliminate(GameState state, PlayerState player) {
+        if (player.isBankrupt()) {
+            return;
+        }
+        long alive = state.players().stream().filter(p -> !p.isBankrupt()).count();
+        player.setFinalRank((int)alive);
+        player.setBankrupt(true);
+
+        if (isGameOver(state)) {
+            state.setGameOver(true);
+        }
+    }
+
     /** 다음 차례가 몇 라운드인지. 턴 순서가 처음으로 돌아오면 1 늘어난다. (첫 턴은 1라운드) */
     int getNextRound(GameState state, long nextPlayerId) {
         if (state.getRoundNumber() == 0) {

@@ -144,4 +144,38 @@ class TurnServiceTest {
 
         assertThat(state.isGameOver()).isTrue();
     }
+
+    @Test
+    void 파산하면_최종_등수는_그_시점의_생존자_수다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(1L));
+        assertThat(state.getPlayerState(1L).isBankrupt()).isTrue();
+        assertThat(state.getPlayerState(1L).getFinalRank()).isEqualTo(3);
+
+        service.eliminate(state, state.getPlayerState(2L));
+        assertThat(state.getPlayerState(2L).getFinalRank()).isEqualTo(2);
+    }
+
+    @Test
+    void 파산으로_한_명만_남으면_게임이_끝난다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(2L));
+        assertThat(state.isGameOver()).isFalse();
+
+        service.eliminate(state, state.getPlayerState(3L));
+        assertThat(state.isGameOver()).isTrue();
+    }
+
+    @Test
+    void 이미_파산한_플레이어는_다시_처리하지_않는다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(1L));
+        service.eliminate(state, state.getPlayerState(1L));
+
+        assertThat(state.getPlayerState(1L).getFinalRank()).isEqualTo(3);
+        assertThat(state.isGameOver()).isFalse();
+    }
 }

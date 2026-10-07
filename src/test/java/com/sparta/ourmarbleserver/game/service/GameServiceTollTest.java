@@ -150,7 +150,7 @@ class GameServiceTollTest {
 
         service.rollDice(ROOM, 1L);
 
-        assertThat(state().getPhase()).isNotEqualTo(TurnPhase.AWAITING_SELL);
+        assertThat(state().getPlayerState(1L).isBankrupt()).isTrue();
     }
 
     /** 같은 땅의 건물 없는 상태 (비교용) */

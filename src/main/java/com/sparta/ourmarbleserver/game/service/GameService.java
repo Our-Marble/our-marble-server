@@ -249,8 +249,7 @@ public class GameService implements MessageHandler {
             if (payer.getMoney() + sellable >= toll) {
                 state.setPhase(TurnPhase.AWAITING_SELL);
             } else {
-                //TODO(경제): 현금부족 -> 전부 팔아도 부족 -> 파산. 그때까지는 턴만 넘긴다.
-                turnService.endTurn(state);
+                declareBankrupt(state, payer, state.getPlayerState(property.getOwnerId()));
             }
             return;
         }
@@ -263,6 +262,28 @@ public class GameService implements MessageHandler {
         } else {
             turnService.endTurn(state);
         }
+    }
+
+    // ===== 파산 =====
+
+    /**
+     * 통행료를 낼 수 없을 때(전부 팔아도 부족) 파산 처리한다. (클라 HandleBankruptcy와 같은 규칙)
+     * 가진 땅을 모두 매각가로 현금화하고, 현금 전액을 수납자에게 넘기고, 땅은 주인 없음 + 건설 단계 0으로 초기화한다.
+     * 파산은 클라에 알리지 않고 서버 내부에서만 처리한다. 더블이어도 턴은 다음 플레이어로 넘어간다.
+     * 게임이 끝나면(생존자 1명) turnService.passTurn은 아무것도 바꾸지 않는다.
+     */
+    private void declareBankrupt(GameState state, PlayerState payer, PlayerState receiver) {
+        long payerId = payer.getPlayerId();
+        long liquidated = propertyService.getTotalSellValue(state, payerId);
+        state.properties().stream()
+                .filter(property -> property.isOwnedBy(payerId))
+                .forEach(PropertyState::reset);
+
+        economyService.deposit(payer, liquidated);
+        economyService.transfer(payer, receiver, payer.getMoney());
+
+        turnService.eliminate(state, payer);
+        turnService.passTurn(state);
     }
 
     // ===== 요청 본문 읽기 =====
