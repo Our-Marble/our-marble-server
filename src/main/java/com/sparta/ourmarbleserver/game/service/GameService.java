@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.game.service;
 
+import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.DiceRolledPayload;
 import com.sparta.ourmarbleserver.game.dto.PropertyData;
 import com.sparta.ourmarbleserver.game.dto.TileData;
@@ -31,16 +32,18 @@ public class GameService implements MessageHandler {
     private final DiceService diceService;
     private final MoveService moveService;
     private final TurnService turnService;
+    private final EconomyService economyService;
     private final GameDataService gameDataService;
     private final List<TileData> tiles;
 
     public GameService(GameStateRepository repository, EventPublisher publisher, DiceService diceService,
-                       MoveService moveService, TurnService turnService, GameDataService gameDataService) {
+                       MoveService moveService, TurnService turnService,EconomyService economyService, GameDataService gameDataService) {
         this.repository = repository;
         this.publisher = publisher;
         this.diceService = diceService;
         this.moveService = moveService;
         this.turnService = turnService;
+        this.economyService = economyService;
         this.gameDataService = gameDataService;
         this.tiles = gameDataService.getTiles();
     }
@@ -96,7 +99,10 @@ public class GameService implements MessageHandler {
 
         // TODO(특수칸): 3연속 더블이면 이동 없이 무인도로, 무인도에 있으면 더블 탈출 처리
 
-        moveService.moveBy(player, dice.sum());
+        MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
+        if (move.passedStart()) {
+            economyService.paySalary(player);
+        }
         processArrival(state, player);
 
         repository.save(state);
