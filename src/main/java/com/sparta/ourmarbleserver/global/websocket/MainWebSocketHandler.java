@@ -18,7 +18,8 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.IOException;
 
 /**
- * 웹소켓 연결 하나하나를 받는 곳
+ * 서버의 모든 웹소켓 통신(로비·대기방·게임)을 받는 단 하나의 창구
+ * 로그인 직후 한 번 연결해 끝까지 유지하며, 로비/게임 구분은 메시지의 topic으로 한다.
  * 연결되면 CONNECTED로 playerId를 알려 주고, 메시지가 오면 번역기(MessageCodec)로 해석한다.
  *
  * 연결/종료 시 SessionRegistry에 등록/제거
@@ -28,7 +29,7 @@ import java.io.IOException;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class GameWebSocketHandler extends TextWebSocketHandler {
+public class MainWebSocketHandler extends TextWebSocketHandler {
 
     /** 핸드셰이크 때 PlayerHandshakeInterceptor가 세션 속성에 playerId를 넣는 이름. 두 곳이 같아야 한다. */
     public static final String PLAYER_ID_ATTRIBUTE = "playerId";
