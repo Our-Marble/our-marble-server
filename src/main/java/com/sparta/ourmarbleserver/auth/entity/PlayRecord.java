@@ -23,4 +23,16 @@ public class PlayRecord {
     public PlayRecord(String nickname) {
         this.nickname = nickname;
     }
+
+    public void recordGame(boolean won) {
+        gamesPlayed++;
+        if (won) {
+            gamesWon++;
+        }
+    }
+
+    public void reset() {
+        gamesPlayed = 0;
+        gamesWon = 0;
+    }
 }
