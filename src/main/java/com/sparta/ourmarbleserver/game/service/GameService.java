@@ -3,6 +3,7 @@ package com.sparta.ourmarbleserver.game.service;
 import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.*;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -15,6 +16,8 @@ import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -39,6 +42,18 @@ public class GameService {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
+
+    /**
+     * 게임 종료 이벤트를 내보내는 곳. 로비가 이 이벤트를 받아 방을 지운다.
+     * GameService가 LobbyService를 직접 알면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 알린다.
+     * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 기본값은 아무것도 하지 않는다.
+     */
+    private ApplicationEventPublisher eventPublisher = event -> {};
+
+    @Autowired
+    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
 
     // ===== 게임 시작 (로비 담당 연동 전 임시) =====
 
@@ -78,7 +93,7 @@ public class GameService {
         // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
         if (turnService.failIslandEscape(player, state.isDouble())) {
             turnService.passTurn(state);
-            repository.save(state);
+            save(state);
             return;
         }
         turnService.escapeIslandByDouble(state, player);
@@ -90,7 +105,7 @@ public class GameService {
             state.setConsecutiveDoubleCount(0);
             moveService.moveDirectly(player, island.getAsInt());
             processArrival(state, player);
-            repository.save(state);
+            save(state);
             return;
         }
 
@@ -100,7 +115,7 @@ public class GameService {
         }
         processArrival(state, player);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 땅 구매 / 거절 =====
@@ -133,7 +148,7 @@ public class GameService {
                 new PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 땅 매각 =====
@@ -176,7 +191,7 @@ public class GameService {
         publish(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
 
     }
 
@@ -230,7 +245,7 @@ public class GameService {
         publish(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 인수 / 거절 =====
@@ -263,7 +278,7 @@ public class GameService {
                 new PropertyAcquiredPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 세계여행 =====
@@ -286,7 +301,7 @@ public class GameService {
         moveService.moveDirectly(player, destinationPosition);
         processArrival(state, player);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 황금열쇠 =====
@@ -303,7 +318,7 @@ public class GameService {
         List<CardData> cards = gameDataService.getCards();
         if (cards.isEmpty()) {
             turnService.endTurn(state); // 카드가 없으면 턴이 멈추지 않도록 종료한다.
-            repository.save(state);
+            save(state);
             return;
         }
         CardData card = cards.get(diceService.randomIndex(cards.size()));
@@ -311,7 +326,7 @@ public class GameService {
 
         applyCardEffect(state, player, card);
 
-        repository.save(state);
+        save(state);
     }
     /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
     private void applyCardEffect(GameState state, PlayerState player, CardData card) {
@@ -449,6 +464,46 @@ public class GameService {
 
         turnService.eliminate(state, payer);
         turnService.passTurn(state);
+    }
+
+    // ===== 게임 종료 =====
+
+    /**
+     * 요청 처리의 마지막에 상태를 저장한다. 게임이 끝났으면 생존자의 최종 등수를 정하고 종료 이벤트를 한 번 내보낸다.
+     * (등수가 아직 안 정해진 생존자가 있을 때만 정하므로, 이벤트도 한 번만 나간다)
+     */
+    private void save(GameState state) {
+        boolean justEnded = state.isGameOver() && assignSurvivorRanks(state);
+        repository.save(state);
+        if (justEnded) {
+            eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
+        }
+    }
+
+    /**
+     * 생존자에게 최종 등수를 1위부터 부여한다. (클라 AssignSurvivorRanks와 같은 규칙)
+     * 총자산(현금 + 투자금) 내림차순 → 현금 내림차순 → 원래 턴 순서. 파산한 플레이어의 등수는 이미 정해져 있어 건드리지 않는다.
+     * 새로 부여했으면 true, 이미 정해져 있었으면 false.
+     */
+    private boolean assignSurvivorRanks(GameState state) {
+        List<PlayerState> survivors = state.players().stream()
+                .filter(player -> !player.isBankrupt())
+                .toList();
+        if (survivors.stream().noneMatch(player -> player.getFinalRank() == 0)) {
+            return false;
+        }
+
+        List<PlayerState> ranked = new ArrayList<>(survivors);
+        ranked.sort(Comparator
+                .comparingLong((PlayerState player) -> propertyService.getTotalAsset(state, player.getPlayerId())).reversed()
+                .thenComparing(Comparator.comparingLong(PlayerState::getMoney).reversed())
+                .thenComparingInt(player -> state.playerOrder().indexOf(player.getPlayerId())));
+
+        int rank = 1;
+        for (PlayerState player : ranked) {
+            player.setFinalRank(rank++);
+        }
+        return true;
     }
 
     // ===== 공통 검증 =====
