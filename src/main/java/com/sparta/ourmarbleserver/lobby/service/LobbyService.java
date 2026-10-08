@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 전송 계층이 ERROR로 바꿔 보낸다.
  * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.
  *
- * 게임이 끝나면 게임 쪽에서 deleteRoom을 불러 방을 지운다.
- * TODO: deleteRoom을 부르는 곳(게임 종료 처리)이 아직 없다. (PLAYING 방은 그대로 남는다)
+ * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 deleteRoom으로 방을 지운다.
+ * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
  */
 @Service
 @RequiredArgsConstructor
@@ -181,7 +181,12 @@ public class LobbyService {
      */
     @EventListener
     public synchronized void onGameEnded(GameEndedEvent event) {
-        repository.deleteById(event.roomId());
+        try {
+            deleteRoom(event.roomId());
+        } catch (GameException ignored) {
+            // 방이 없으면 지울 것이 없다.
+        }
+
     }
 
     // ==== 도우미 ====

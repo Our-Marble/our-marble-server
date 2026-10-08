@@ -3,12 +3,12 @@ package com.sparta.ourmarbleserver.game.service;
 import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.*;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.EventPublisher;
-import com.sparta.ourmarbleserver.global.transport.MessageHandler;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
@@ -16,19 +16,21 @@ import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 
 import java.util.*;
 
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION, DRAW_CARD
+ * 요청 type 분류와 요청 본문 읽기는 하지 않는다. MessageRouter가 type별로 아래 함수를 직접 호출한다.
+ * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
  */
 @Service
 @RequiredArgsConstructor
-public class GameService implements MessageHandler {
+public class GameService {
 
     /** 초기 자금 */
     public static final long START_MONEY = 500_000;
@@ -41,27 +43,16 @@ public class GameService implements MessageHandler {
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
 
-    // ==== 요청 받기 ====
+    /**
+     * 게임 종료 이벤트를 내보내는 곳. 로비가 이 이벤트를 받아 방을 지운다.
+     * GameService가 LobbyService를 직접 알면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 알린다.
+     * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 기본값은 아무것도 하지 않는다.
+     */
+    private ApplicationEventPublisher eventPublisher = event -> {};
 
-    @Override
-    public Set<MessageType> types() {
-        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
-                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION,
-                MessageType.DRAW_CARD);
-    }
-
-    @Override
-    public void handle(MessageType type, String roomId, long playerId, JsonNode payload) {
-        switch (type) {
-            case ROLL_DICE -> rollDice(roomId,playerId);
-            case PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
-            case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case CHOOSE_DESTINATION -> chooseDestination(roomId,playerId,requireDestination(payload));
-            case DRAW_CARD -> drawCard(roomId, playerId);
-            default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
-        }
+    @Autowired
+    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
     }
 
     // ===== 게임 시작 (로비 담당 연동 전 임시) =====
@@ -96,13 +87,13 @@ public class GameService implements MessageHandler {
         PlayerState player = state.getPlayerState(playerId);
 
         DiceService.DiceResult dice = diceService.roll(state);
-        publisher.publishToRoom(roomId, MessageType.DICE_ROLLED,
+        publish(roomId, MessageType.DICE_ROLLED,
                 new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
         // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
         if (turnService.failIslandEscape(player, state.isDouble())) {
             turnService.passTurn(state);
-            repository.save(state);
+            save(state);
             return;
         }
         turnService.escapeIslandByDouble(state, player);
@@ -114,7 +105,7 @@ public class GameService implements MessageHandler {
             state.setConsecutiveDoubleCount(0);
             moveService.moveDirectly(player, island.getAsInt());
             processArrival(state, player);
-            repository.save(state);
+            save(state);
             return;
         }
 
@@ -124,7 +115,7 @@ public class GameService implements MessageHandler {
         }
         processArrival(state, player);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 땅 구매 / 거절 =====
@@ -153,11 +144,11 @@ public class GameService implements MessageHandler {
             property.setOwnerId(playerId);
         }
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTY_PURCHASED,
+        publish(roomId, MessageType.PROPERTY_PURCHASED,
                 new PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 땅 매각 =====
@@ -197,10 +188,10 @@ public class GameService implements MessageHandler {
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
 
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
+        publish(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
 
     }
 
@@ -251,10 +242,10 @@ public class GameService implements MessageHandler {
             property.setBuildingLevel(nextLevel);
         }
 
-        publisher.publishToRoom(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
+        publish(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 인수 / 거절 =====
@@ -283,11 +274,11 @@ public class GameService implements MessageHandler {
             property.setOwnerId(playerId);
         }
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTY_ACQUIRED,
+        publish(roomId, MessageType.PROPERTY_ACQUIRED,
                 new PropertyAcquiredPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 세계여행 =====
@@ -304,13 +295,13 @@ public class GameService implements MessageHandler {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
 
-        publisher.publishToRoom(roomId, MessageType.DESTINATION_CHOSEN,
+        publish(roomId, MessageType.DESTINATION_CHOSEN,
                 new DestinationChosenPayload(playerId, destinationPosition));
 
         moveService.moveDirectly(player, destinationPosition);
         processArrival(state, player);
 
-        repository.save(state);
+        save(state);
     }
 
     // ===== 황금열쇠 =====
@@ -327,15 +318,15 @@ public class GameService implements MessageHandler {
         List<CardData> cards = gameDataService.getCards();
         if (cards.isEmpty()) {
             turnService.endTurn(state); // 카드가 없으면 턴이 멈추지 않도록 종료한다.
-            repository.save(state);
+            save(state);
             return;
         }
         CardData card = cards.get(diceService.randomIndex(cards.size()));
-        publisher.publishToRoom(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
+        publish(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
 
         applyCardEffect(state, player, card);
 
-        repository.save(state);
+        save(state);
     }
     /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
     private void applyCardEffect(GameState state, PlayerState player, CardData card) {
@@ -380,6 +371,7 @@ public class GameService implements MessageHandler {
         OptionalInt island = turnService.findIslandPosition();
         if (island.isEmpty()) {
             turnService.endTurn(state);
+            return;
         }
         moveService.moveDirectly(player, island.getAsInt());
         processArrival(state, player);
@@ -474,51 +466,44 @@ public class GameService implements MessageHandler {
         turnService.passTurn(state);
     }
 
-    // ===== 요청 본문 읽기 =====
+    // ===== 게임 종료 =====
 
-    /** payload에서 propertyId를 읽는다. 없거나 숫자가 아니면 올바르지 않은 땅으로 거부한다. */
-
-    private static int requirePropertyId(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("propertyId");
-        if(node == null || !node.isNumber()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+    /**
+     * 요청 처리의 마지막에 상태를 저장한다. 게임이 끝났으면 생존자의 최종 등수를 정하고 종료 이벤트를 한 번 내보낸다.
+     * (등수가 아직 안 정해진 생존자가 있을 때만 정하므로, 이벤트도 한 번만 나간다)
+     */
+    private void save(GameState state) {
+        boolean justEnded = state.isGameOver() && assignSurvivorRanks(state);
+        repository.save(state);
+        if (justEnded) {
+            eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
         }
-        return node.intValue();
     }
 
-    /** payload에서 isAccept를 읽는다. 빠졌으면 실수로 사거나 거절하지 않도록 거부한다. */
-    private static boolean requireAccept(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("isAccept");
-        if(node == null || !node.isBoolean()) {
-            throw new GameException(ErrorCode.INVALID_STATE);
+    /**
+     * 생존자에게 최종 등수를 1위부터 부여한다. (클라 AssignSurvivorRanks와 같은 규칙)
+     * 총자산(현금 + 투자금) 내림차순 → 현금 내림차순 → 원래 턴 순서. 파산한 플레이어의 등수는 이미 정해져 있어 건드리지 않는다.
+     * 새로 부여했으면 true, 이미 정해져 있었으면 false.
+     */
+    private boolean assignSurvivorRanks(GameState state) {
+        List<PlayerState> survivors = state.players().stream()
+                .filter(player -> !player.isBankrupt())
+                .toList();
+        if (survivors.stream().noneMatch(player -> player.getFinalRank() == 0)) {
+            return false;
         }
-        return node.booleanValue();
-    }
 
-    /** payload에서 propertyIds를 읽는다. 없거나 배열이 아니거나 숫자가 아닌 값이 있으면 목록 오류로 거부한다. */
-    private static List<Integer> requirePropertyIds(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("propertyIds");
-        if (node == null || !node.isArray()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
-        }
-        List<Integer> propertyIds = new ArrayList<>();
-        for (int i = 0; i < node.size(); ++i) {
-            JsonNode element = node.get(i);
-            if (!element.isNumber()) {
-                throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
-            }
-            propertyIds.add(element.intValue());
-        }
-        return propertyIds;
-    }
+        List<PlayerState> ranked = new ArrayList<>(survivors);
+        ranked.sort(Comparator
+                .comparingLong((PlayerState player) -> propertyService.getTotalAsset(state, player.getPlayerId())).reversed()
+                .thenComparing(Comparator.comparingLong(PlayerState::getMoney).reversed())
+                .thenComparingInt(player -> state.playerOrder().indexOf(player.getPlayerId())));
 
-    /** payload에서 destinationPosition을 읽는다. 없거나 숫자가 아니면 올바르지 않은 칸으로 거부한다. */
-    private static int requireDestination(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("destinationPosition");
-        if (node == null || !node.isNumber()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        int rank = 1;
+        for (PlayerState player : ranked) {
+            player.setFinalRank(rank++);
         }
-        return node.intValue();
+        return true;
     }
 
     // ===== 공통 검증 =====
@@ -563,4 +548,12 @@ public class GameService implements MessageHandler {
         return gameDataService.getTiles().get(position);
     }
 
+    /**
+     * 방 전원에게 알림을 보낸다.
+     * TODO(네트워크): 실제 EventPublisher가 확정되기 전까지 알림이 나가지 않도록 호출을 주석 처리했다.
+     * 확정되면 아래 줄의 주석을 풀고, EventPublisher 모양이 바뀌었으면 여기만 고친다.
+     */
+    private void publish(String roomId, MessageType type, Object payload) {
+        //publisher.publishToRoom(roomId,type, payload);
+    }
 }

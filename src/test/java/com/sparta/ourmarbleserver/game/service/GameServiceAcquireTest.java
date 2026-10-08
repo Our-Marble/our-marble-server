@@ -202,17 +202,6 @@ class GameServiceAcquireTest {
     }
 
     @Test
-    void handle로_인수_요청을_처리한다() throws Exception {
-        GameService service = newService();
-
-        assertThat(service.types()).contains(MessageType.ACQUIRE_PROPERTY);
-        service.handle(MessageType.ACQUIRE_PROPERTY, ROOM, 1L,
-                mapper.readTree("{\"propertyId\":103,\"isAccept\":true}"));
-
-        assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
-    }
-
-    @Test
     void 통행료를_내고_인수까지_한_흐름으로_이어진다() {
         GameService service = newService();
         state().getPlayerState(1L).setPosition(0);

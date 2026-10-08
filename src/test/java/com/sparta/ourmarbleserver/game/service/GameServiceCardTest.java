@@ -225,13 +225,4 @@ class GameServiceCardTest {
         assertThat(publisher.events()).isEmpty();
     }
 
-    @Test
-    void handle로_카드_뽑기_요청을_처리한다() {
-        GameService service = newService(faceOf(1));
-
-        assertThat(service.types()).contains(MessageType.DRAW_CARD);
-        service.handle(MessageType.DRAW_CARD, ROOM, 1L, null);
-
-        assertThat(publisher.types()).containsExactly(MessageType.CARD_DRAWN);
-    }
 }

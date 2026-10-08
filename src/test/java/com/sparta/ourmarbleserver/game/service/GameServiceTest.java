@@ -132,16 +132,6 @@ class GameServiceTest {
     }
 
     @Test
-    void handle로도_ROLL_DICE를_처리한다() {
-        GameService service = newService(1, 2);
-
-        assertThat(service.types()).contains(MessageType.ROLL_DICE);
-        service.handle(MessageType.ROLL_DICE, ROOM, 1L, null);
-
-        assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);
-    }
-
-    @Test
     void 내_차례가_아니면_거부되고_상태가_바뀌지_않는다() {
         GameService service = newService(1, 2);
 
