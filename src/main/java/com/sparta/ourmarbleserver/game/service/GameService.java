@@ -56,14 +56,29 @@ public class GameService {
         this.eventPublisher = eventPublisher;
     }
 
-    // ===== 게임 시작 (로비 담당 연동 전 임시) =====
+    // ===== 게임 시작 (로비가 부른다) =====
 
-    /** 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다. */
+    /** 방 상태를 만들고 첫 플레이어의 턴을 시작한다. 닉네임은 빈 문자열이고 봇은 없는 시작이다. */
     public GameState startGame(String roomId, List<Long> playerIds) {
+        return startGame(roomId, playerIds, Map.of(), Set.of());
+    }
+
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
+     * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
+     * 플레이어 목록이 비었거나 중복이면 IllegalArgumentException.
+     * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
+     */
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
+        if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
+            throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
+        }
         GameState state = new GameState(roomId);
         for(long id : playerIds) {
             PlayerState player = new PlayerState(id);
             player.setMoney(START_MONEY);
+            player.setNickname(nicknames.getOrDefault(id, ""));
+            player.setBot(botIds.contains(id));
             state.addPlayer(player);
         }
         state.setPlayerOrder(playerIds);
