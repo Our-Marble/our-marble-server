@@ -1,5 +1,7 @@
 package com.sparta.ourmarbleserver.game.controller;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.springdoc.core.customizers.OpenApiCustomizer;
@@ -30,7 +32,7 @@ import io.swagger.v3.oas.models.Paths;
  * 필드 이름과 타입은 payload dto에서 자동으로 읽고, 예시 값은 @ExampleObject에 적은 값이다.
  * 실제 게임 로직과 무관하다.
  */
-@Tag(name = "서버 → 클라 알림", description = "WebSocket으로 방 전원에게 전송. 메시지 봉투는 { type, roomId, seq, payload } 이고, 여기에는 payload 모양만 나온다.")
+@Tag(name = "게임 알림", description = "서버가 WebSocket으로 방 전원에게 보내는 게임 알림")
 @RestController
 @RequestMapping("/docs/notifications")
 public class MessageDocController {
@@ -100,6 +102,13 @@ public class MessageDocController {
 
     /** 문서에 나오는 순서 (명세 표 순서). Redoc은 이 순서 그대로 보여 준다. */
     private static final List<String> DOC_ORDER = List.of(
+            "/docs/requests/build",
+            "/docs/requests/draw-card",
+            "/docs/requests/choose-destination",
+            "/docs/requests/roll-dice",
+            "/docs/requests/sell-properties",
+            "/docs/requests/acquire-property",
+            "/docs/requests/purchase-property",
             "/docs/notifications/built",
             "/docs/notifications/card-drawn",
             "/docs/notifications/destination-chosen",
@@ -107,6 +116,9 @@ public class MessageDocController {
             "/docs/notifications/properties-sold",
             "/docs/notifications/property-acquired",
             "/docs/notifications/property-purchased");
+
+    /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
+    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림");
 
     /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */
     @Bean
@@ -127,6 +139,15 @@ public class MessageDocController {
                 }
             });
             openApi.setPaths(ordered);
+
+            if (openApi.getTags() != null) {
+                List<io.swagger.v3.oas.models.tags.Tag> tags = new ArrayList<>(openApi.getTags());
+                tags.sort(Comparator.comparingInt(tag -> {
+                    int index = TAG_ORDER.indexOf(tag.getName());
+                    return index < 0 ? TAG_ORDER.size() : index;
+                }));
+                openApi.setTags(tags);
+            }
         };
     }
 }
