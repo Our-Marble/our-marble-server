@@ -27,6 +27,7 @@ import java.util.*;
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
  * 요청 type 분류와 요청 본문 읽기는 하지 않는다. MessageRouter가 type별로 아래 함수를 직접 호출한다.
  * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
+ * 요청 처리 함수는 synchronized로 한 번에 하나씩 처리한다. (같은 요청이 겹치면 상태가 꼬이므로, startGame은 새 방이라 제외)
  */
 @Service
 @RequiredArgsConstructor
@@ -82,7 +83,7 @@ public class GameService {
      * 알림은 DICE_ROLLED 하나만 나간다. 이동과 월급은 클라가 같은 규칙으로 계산한다.
      * 무인도 영업정지 중이면 더블이 아닐 때 이동 없이 턴이 넘어가고, 3연속 더블이면 무인도로 간다.
      */
-    public void rollDice(String roomId, long playerId) {
+    public synchronized void rollDice(String roomId, long playerId) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_ROLL);
         PlayerState player = state.getPlayerState(playerId);
 
@@ -125,7 +126,7 @@ public class GameService {
      * 구매: 빈 땅 → 현금 확인 → 땅값 차감 → 주인 등록. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
 
-    public void purchaseProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
+    public synchronized void purchaseProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_PURCHASE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -158,7 +159,7 @@ public class GameService {
      * 검증 순서: 목록이 비었거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
      * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
      */
-    public void sellProperties(String roomId, long playerId, List<Integer> propertyIds) {
+    public synchronized void sellProperties(String roomId, long playerId, List<Integer> propertyIds) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_SELL);
         PlayerState payer = state.getPlayerState(playerId);
 
@@ -216,7 +217,7 @@ public class GameService {
      * 건설 검증: 내 땅(NOT_OWNER) → 건설 가능 땅(CANNOT_BUILD) → 호텔 아님(MAX_LEVEL) → 현금 ≥ 건설비(NOT_ENOUGH_MONEY).
      * 건물은 한 단계씩 올라가고 건설비는 올라갈 단계의 비용이다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public void build(String roomId, long playerId, int propertyId, boolean isAccept) {
+    public synchronized void build(String roomId, long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_BUILD, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -255,7 +256,7 @@ public class GameService {
      * 인수 검증: 남의 땅(CANNOT_ACQUIRE) → 현금 ≥ 인수가(NOT_ENOUGH_MONEY). 인수가는 이전 주인에게 이체하고
      * 건물 단계는 그대로 둔 채 주인만 바꾼다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public void acquireProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
+    public synchronized void acquireProperty(String roomId, long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_ACQUIRE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -287,7 +288,7 @@ public class GameService {
      * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
      * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
      */
-    public void chooseDestination(String roomId, long playerId, int destinationPosition) {
+    public synchronized void chooseDestination(String roomId, long playerId, int destinationPosition) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DESTINATION);
         PlayerState player = state.getPlayerState(playerId);
 
@@ -310,7 +311,7 @@ public class GameService {
      * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
      * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
      */
-    public void drawCard(String roomId, long playerId)
+    public synchronized void drawCard(String roomId, long playerId)
     {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DRAW_CARD);
         PlayerState player = state.getPlayerState(playerId);
