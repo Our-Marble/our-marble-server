@@ -15,12 +15,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 로비 도메인 서비스. HTTP 컨트롤러는 이 클래스의 메서드만 호출한다.
- * playerId는 컨트롤러가 로그인 세션에서 꺼내 넘긴다. (SessionConst.LOGIN_MEMBER_ID)
- * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 컨트롤러가 HTTP 응답으로 바꾼다.
+ * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(MessageHandler)이 이 클래스의 메서드만 호출한다.
+ * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
+ * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 전송 계층이 ERROR로 바꿔 보낸다.
  * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.
  *
- * TODO: 게임이 끝나면 방을 지우는 연결이 아직 없다. (PLAYING 방은 남아 있다)
+ * 게임이 끝나면 게임 쪽에서 deleteRoom을 불러 방을 지운다.
+ * TODO: deleteRoom을 부르는 곳(게임 종료 처리)이 아직 없다. (PLAYING 방은 그대로 남는다)
  */
 @Service
 @RequiredArgsConstructor
@@ -160,6 +161,17 @@ public class LobbyService {
         room.setStatus(RoomStatus.PLAYING);
         repository.save(room);
         return toInfo(room);
+    }
+
+    // ==== 방 삭제 ====
+
+    /**
+     * 방을 지운다. 게임이 끝났을 때 게임 쪽에서 부른다. 시작한 방(PLAYING)도 지운다.
+     * 없는 방이면 ROOM_NOT_FOUND.
+     */
+    public synchronized void deleteRoom(String roomId) {
+        findRoom(roomId);
+        repository.deleteById(roomId);
     }
 
     // ==== 도우미 ====
