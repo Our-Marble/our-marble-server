@@ -21,15 +21,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 현재 처리하는 요청: OLL_DICE, PURCHASE_PROPERTY로, EconomyService. 나머지 요청은 단계별로 추가한다.
+ * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION
  */
 @Service
 @RequiredArgsConstructor
@@ -92,6 +89,7 @@ public class GameService implements MessageHandler {
     /**
      * 주사위를 굴리고 이동한 뒤 도착 칸에 따라 다음 phase를 정한다.
      * 알림은 DICE_ROLLED 하나만 나간다. 이동과 월급은 클라가 같은 규칙으로 계산한다.
+     * 무인도 영업정지 중이면 더블이 아닐 때 이동 없이 턴이 넘어가고, 3연속 더블이면 무인도로 간다.
      */
     public void rollDice(String roomId, long playerId) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_ROLL);
@@ -101,7 +99,24 @@ public class GameService implements MessageHandler {
         publisher.publishToRoom(roomId, MessageType.DICE_ROLLED,
                 new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
-        // TODO(특수칸): 3연속 더블이면 이동 없이 무인도로, 무인도에 있으면 더블 탈출 처리
+        // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
+        if (turnService.failIslandEscape(player, state.isDouble())) {
+            turnService.passTurn(state);
+            repository.save(state);
+            return;
+        }
+        turnService.escapeIslandByDouble(state, player);
+
+        // 3연속 더블이면 이동하지 않고 무인도로 간다. (월급 없음, 도착 처리에서 영업정지 시작과 턴 넘김)
+        OptionalInt island = turnService.findIslandPosition();
+        if(state.getConsecutiveDoubleCount() >= 3 && island.isPresent()) {
+            state.setDouble(false);
+            state.setConsecutiveDoubleCount(0);
+            moveService.moveDirectly(player, island.getAsInt());
+            processArrival(state, player);
+            repository.save(state);
+            return;
+        }
 
         MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
         if (move.passedStart()) {
@@ -176,7 +191,7 @@ public class GameService implements MessageHandler {
             throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
         }
 
-        // 검증이 모두 끝났으니 상태를 바꾼다,
+        // 검증이 모두 끝났으니 상태를 바꾼다.
         selected.forEach(PropertyState::reset);
         economyService.deposit(payer, proceeds);
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
@@ -315,9 +330,10 @@ public class GameService implements MessageHandler {
                 turnService.endTurn(state);
             }
             case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
-
-            // TODO(특수칸): 무인도. 그때까지는 턴만 넘긴다.
-
+            case "ISLAND" -> {
+                turnService.imprison(player);
+                turnService.passTurn(state); // 강제로 턴을 넘긴다.
+            }
             default -> turnService.endTurn(state);
         }
     }
