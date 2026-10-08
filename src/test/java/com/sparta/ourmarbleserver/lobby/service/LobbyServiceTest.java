@@ -319,4 +319,43 @@ class LobbyServiceTest {
 
         assertThat(service.getRoom(room.roomId()).status()).isEqualTo(RoomStatus.WAITING);
     }
+
+
+    // ===== 방 삭제 =====
+
+    @Test
+    void 방을_삭제하면_목록과_조회에서_사라진다() {
+        RoomInfo room = roomWithTwo();
+
+        service.deleteRoom(room.roomId());
+
+        assertThat(service.listRooms()).isEmpty();
+        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
+    }
+
+    @Test
+    void 시작한_방도_삭제할_수_있다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        service.deleteRoom(room.roomId());
+
+        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
+    }
+
+    @Test
+    void 없는_방을_삭제하면_ROOM_NOT_FOUND() {
+        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.deleteRoom("r_없음"));
+    }
+
+    @Test
+    void 방이_삭제되면_참가자가_새_방을_만들_수_있다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+
+        service.deleteRoom(room.roomId());
+
+        assertThat(service.createRoom(HOST, MAP, 4).roomId()).isNotEqualTo(room.roomId());
+    }
 }
