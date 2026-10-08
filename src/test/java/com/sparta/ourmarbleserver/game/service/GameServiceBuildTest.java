@@ -66,7 +66,7 @@ class GameServiceBuildTest {
     void 건설하면_건설비가_차감되고_한_단계_올라간다() {
         GameService service = newService();
 
-        service.build(ROOM, 1L, PROPERTY_ID, true);
+        service.build( 1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - 50_000);
@@ -77,7 +77,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(PROPERTY_ID).setBuildingLevel(BuildingLevel.VILLA);
 
-        service.build(ROOM, 1L, PROPERTY_ID, true);
+        service.build( 1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.BUILDING);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - 100_000);
@@ -87,7 +87,7 @@ class GameServiceBuildTest {
     void 건설하면_BUILT가_방_전원에게_나가고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.build(ROOM, 1L, PROPERTY_ID, true);
+        service.build( 1L, PROPERTY_ID, true);
 
         assertThat(publisher.types()).containsExactly(MessageType.BUILT);
         assertThat(publisher.last().playerId()).isNull();
@@ -103,7 +103,7 @@ class GameServiceBuildTest {
     void 거절하면_상태는_그대로이고_isAccept_false로_알리고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.build(ROOM, 1L, PROPERTY_ID, false);
+        service.build( 1L, PROPERTY_ID, false);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
@@ -116,7 +116,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         state().setDouble(true);
 
-        service.build(ROOM, 1L, PROPERTY_ID, true);
+        service.build( 1L, PROPERTY_ID, true);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
@@ -127,7 +127,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(49_999);
 
-        assertRejected(() -> service.build(ROOM, 1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.build( 1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(49_999);
@@ -140,7 +140,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(0);
 
-        service.build(ROOM, 1L, PROPERTY_ID, false);
+        service.build( 1L, PROPERTY_ID, false);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
     }
@@ -150,7 +150,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(PROPERTY_ID).setBuildingLevel(BuildingLevel.HOTEL);
 
-        assertRejected(() -> service.build(ROOM, 1L, PROPERTY_ID, true), ErrorCode.MAX_LEVEL);
+        assertRejected(() -> service.build( 1L, PROPERTY_ID, true), ErrorCode.MAX_LEVEL);
         assertThat(publisher.events()).isEmpty();
     }
 
@@ -160,7 +160,7 @@ class GameServiceBuildTest {
         state().getPlayerState(1L).setPosition(4);   // 독도 (건설 불가)
         property(104).setOwnerId(1L);
 
-        assertRejected(() -> service.build(ROOM, 1L, 104, true), ErrorCode.CANNOT_BUILD);
+        assertRejected(() -> service.build( 1L, 104, true), ErrorCode.CANNOT_BUILD);
         assertThat(publisher.events()).isEmpty();
     }
 
@@ -169,7 +169,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(PROPERTY_ID).setOwnerId(2L);
 
-        assertRejected(() -> service.build(ROOM, 1L, PROPERTY_ID, true), ErrorCode.NOT_OWNER);
+        assertRejected(() -> service.build( 1L, PROPERTY_ID, true), ErrorCode.NOT_OWNER);
     }
 
     @Test
@@ -177,24 +177,24 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(104).setOwnerId(1L);
 
-        assertRejected(() -> service.build(ROOM, 1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.build( 1L, 104, true), ErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 없는_땅_번호면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.build(ROOM, 1L, 999, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.build( 1L, 999, true), ErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니거나_건설을_고를_phase가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.build(ROOM, 2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.build( 2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.build(ROOM, 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.build( 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
     }
 
 }

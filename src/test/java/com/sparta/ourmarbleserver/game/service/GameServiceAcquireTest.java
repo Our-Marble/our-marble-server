@@ -88,7 +88,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         long price = propertyService.getAcquireValue(property(PROPERTY_ID));
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(price).isEqualTo(160_000);
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
@@ -101,7 +101,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         property(PROPERTY_ID).setBuildingLevel(BuildingLevel.VILLA);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
     }
@@ -110,7 +110,7 @@ class GameServiceAcquireTest {
     void 인수하면_PROPERTY_ACQUIRED가_방_전원에게_나가고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(publisher.types()).containsExactly(MessageType.PROPERTY_ACQUIRED);
         assertThat(publisher.last().playerId()).isNull();
@@ -127,7 +127,7 @@ class GameServiceAcquireTest {
     void 거절하면_상태는_그대로이고_isAccept_false로_알리고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, false);
+        service.acquireProperty( 1L, PROPERTY_ID, false);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(2L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
@@ -141,7 +141,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().setDouble(true);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
@@ -152,7 +152,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(159_999);
 
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.acquireProperty( 1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(2L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(159_999);
@@ -165,7 +165,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(160_000);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
@@ -176,10 +176,10 @@ class GameServiceAcquireTest {
         GameService service = newService();
 
         property(PROPERTY_ID).setOwnerId(1L);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
+        assertRejected(() -> service.acquireProperty( 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
 
         property(PROPERTY_ID).setOwnerId(null);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
+        assertRejected(() -> service.acquireProperty( 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
         assertThat(publisher.events()).isEmpty();
     }
 
@@ -188,17 +188,17 @@ class GameServiceAcquireTest {
         GameService service = newService();
         property(104).setOwnerId(2L);
 
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.acquireProperty( 1L, 104, true), ErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니거나_인수를_고를_phase가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.acquireProperty(ROOM, 2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.acquireProperty( 2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.acquireProperty( 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
     }
 
     @Test
@@ -209,10 +209,10 @@ class GameServiceAcquireTest {
         long toll = propertyService.getToll(property(PROPERTY_ID));
         long price = propertyService.getAcquireValue(property(PROPERTY_ID));
 
-        service.rollDice(ROOM, 1L);   // 주사위 (1, 2) → 3번 칸 도착, 통행료 정산
+        service.rollDice( 1L);   // 주사위 (1, 2) → 3번 칸 도착, 통행료 정산
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ACQUIRE);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty( 1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll - price);

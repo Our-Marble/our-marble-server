@@ -81,7 +81,7 @@ class GameServiceBankruptTest {
     void 전부_팔아도_통행료에_못_미치면_파산한다() {
         GameService service = newService(2, 1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).isBankrupt()).isTrue();
         assertThat(state().getPlayerState(1L).getFinalRank()).isEqualTo(2);
@@ -92,7 +92,7 @@ class GameServiceBankruptTest {
         GameService service = newService(2, 1, 2);
         long liquidated = propertyService.getSellValue(property(101));
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
         assertThat(state().getPlayerState(2L).getMoney()).isEqualTo(GameService.START_MONEY + 10_000 + liquidated);
@@ -105,7 +105,7 @@ class GameServiceBankruptTest {
         property(105).setBuildingLevel(BuildingLevel.VILLA);   // 투자금 100,000 → 매각가 50,000
         long liquidated = propertyService.getSellValue(property(101)) + propertyService.getSellValue(property(105));
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(property(101).hasOwner()).isFalse();
         assertThat(property(105).hasOwner()).isFalse();
@@ -118,7 +118,7 @@ class GameServiceBankruptTest {
     void 파산은_클라에_알리지_않고_주사위_알림만_나간다() {
         GameService service = newService(2, 1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);
     }
@@ -127,7 +127,7 @@ class GameServiceBankruptTest {
     void 두_명_게임에서_한_명이_파산하면_게임이_끝난다() {
         GameService service = newService(2, 1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().isGameOver()).isTrue();
     }
@@ -136,7 +136,7 @@ class GameServiceBankruptTest {
     void 세_명_게임에서_파산하면_다음_생존자에게_턴이_넘어가고_게임은_계속된다() {
         GameService service = newService(3, 1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getFinalRank()).isEqualTo(3);
         assertThat(state().isGameOver()).isFalse();
@@ -149,7 +149,7 @@ class GameServiceBankruptTest {
         GameService service = newService(3, 2, 2);   // 더블 (2, 2) → 4번 칸 (독도, 통행료 300,000)
         property(104).setOwnerId(2L);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).isBankrupt()).isTrue();
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
@@ -159,9 +159,9 @@ class GameServiceBankruptTest {
     @Test
     void 파산한_플레이어가_다시_요청하면_거부된다() {
         GameService service = newService(3, 1, 2);
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
-        assertThatThrownBy(() -> service.rollDice(ROOM, 1L))
+        assertThatThrownBy(() -> service.rollDice( 1L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
     }

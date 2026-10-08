@@ -96,7 +96,7 @@ class GameServiceEndTest {
         GameService service = newService(2, 1, 2);
         prepareBankruptcy();
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().isGameOver()).isTrue();
         assertThat(player(2L).getFinalRank()).isEqualTo(1);
@@ -109,7 +109,7 @@ class GameServiceEndTest {
         GameService service = newService(3, 1, 2);
         prepareBankruptcy();
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().isGameOver()).isFalse();
         assertThat(player(1L).getFinalRank()).isEqualTo(3);   // 파산자: 파산 시점의 생존자 수
@@ -122,7 +122,7 @@ class GameServiceEndTest {
     void 일반_진행_중에는_등수도_종료_이벤트도_없다() {
         GameService service = newService(2, 1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().isGameOver()).isFalse();
         assertThat(player(1L).getFinalRank()).isZero();
@@ -136,7 +136,7 @@ class GameServiceEndTest {
         player(1L).setMoney(700_000);
         player(2L).setMoney(500_000);
 
-        service.purchaseProperty(ROOM, 2L, 103, false);
+        service.purchaseProperty( 2L, 103, false);
 
         assertThat(state().isGameOver()).isTrue();
         assertThat(player(1L).getFinalRank()).isEqualTo(1);
@@ -152,7 +152,7 @@ class GameServiceEndTest {
         player(1L).setMoney(520_000);   // 총자산 520,000
         player(2L).setMoney(500_000);   // 총자산 550,000
 
-        service.purchaseProperty(ROOM, 2L, 103, false);
+        service.purchaseProperty( 2L, 103, false);
 
         assertThat(player(2L).getFinalRank()).isEqualTo(1);
         assertThat(player(1L).getFinalRank()).isEqualTo(2);
@@ -166,7 +166,7 @@ class GameServiceEndTest {
         player(1L).setMoney(500_000);   // 총자산 550,000, 현금 500,000
         player(2L).setMoney(550_000);   // 총자산 550,000, 현금 550,000
 
-        service.purchaseProperty(ROOM, 2L, 103, false);
+        service.purchaseProperty( 2L, 103, false);
 
         assertThat(player(2L).getFinalRank()).isEqualTo(1);
         assertThat(player(1L).getFinalRank()).isEqualTo(2);
@@ -177,7 +177,7 @@ class GameServiceEndTest {
         GameService service = newService(2);
         prepareRoundEnd(service);
 
-        service.purchaseProperty(ROOM, 2L, 103, false);
+        service.purchaseProperty( 2L, 103, false);
 
         assertThat(player(1L).getFinalRank()).isEqualTo(1);
         assertThat(player(2L).getFinalRank()).isEqualTo(2);
@@ -191,7 +191,7 @@ class GameServiceEndTest {
         player(3L).setFinalRank(3);
         player(1L).setMoney(600_000);
 
-        service.purchaseProperty(ROOM, 2L, 103, false);
+        service.purchaseProperty( 2L, 103, false);
 
         assertThat(state().isGameOver()).isTrue();
         assertThat(player(1L).getFinalRank()).isEqualTo(1);

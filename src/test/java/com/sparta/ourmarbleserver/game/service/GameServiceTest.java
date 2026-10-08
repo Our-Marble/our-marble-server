@@ -78,7 +78,7 @@ class GameServiceTest {
     void 주사위를_굴리면_DICE_ROLLED_알림이_방_전원에게_하나만_나간다() {
         GameService service = newService(1, 2);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);
         assertThat(publisher.last().playerId()).isNull();
@@ -92,7 +92,7 @@ class GameServiceTest {
     void 빈_땅에_도착하면_구매_선택을_기다린다() {
         GameService service = newService(1, 2);   // 0 + 3 = 3번 칸 (땅 103)
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(3);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
@@ -104,7 +104,7 @@ class GameServiceTest {
         GameService service = newService(1, 2);
         state().getPropertyState(103).orElseThrow().setOwnerId(1L);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_BUILD);
     }
@@ -113,7 +113,7 @@ class GameServiceTest {
     void 황금열쇠_칸에_도착하면_카드_뽑기를_기다린다() {
         GameService service = newService(1, 1);   // 0 + 2 = 2번 칸 (황금열쇠), 더블
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DRAW_CARD);
         assertThat(state().isDouble()).isTrue();
@@ -124,7 +124,7 @@ class GameServiceTest {
         GameService service = newService(1, 2);
         state().getPlayerState(1L).setPosition(30);   // 30 + 3 = 33 → 1번 칸
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(1);
         assertThat(state().getPlayerState(1L).getMoney())
@@ -135,7 +135,7 @@ class GameServiceTest {
     void 내_차례가_아니면_거부되고_상태가_바뀌지_않는다() {
         GameService service = newService(1, 2);
 
-        assertThatThrownBy(() -> service.rollDice(ROOM, 2L))
+        assertThatThrownBy(() -> service.rollDice( 2L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
 
@@ -149,7 +149,7 @@ class GameServiceTest {
         GameService service = newService(1, 2);
         state().getPlayerState(1L).setBankrupt(true);
 
-        assertThatThrownBy(() -> service.rollDice(ROOM, 1L))
+        assertThatThrownBy(() -> service.rollDice( 1L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.PLAYER_BANKRUPT));
         assertThat(publisher.events()).isEmpty();
@@ -160,17 +160,17 @@ class GameServiceTest {
         GameService service = newService(1, 2);
         state().setPhase(TurnPhase.AWAITING_PURCHASE);
 
-        assertThatThrownBy(() -> service.rollDice(ROOM, 1L))
+        assertThatThrownBy(() -> service.rollDice( 1L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
         assertThat(publisher.events()).isEmpty();
     }
 
     @Test
-    void 없는_방이면_거부된다() {
+    void 진행_중인_게임에_속하지_않은_플레이어면_거부된다() {
         GameService service = newService(1, 2);
 
-        assertThatThrownBy(() -> service.rollDice("없는방", 1L))
+        assertThatThrownBy(() -> service.rollDice(99L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
     }

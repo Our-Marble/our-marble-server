@@ -62,7 +62,7 @@ class GameServiceConcurrencyTest {
                 ready.countDown();
                 try {
                     go.await();
-                    service.purchaseProperty(ROOM, 1L, PROPERTY_ID, true);
+                    service.purchaseProperty( 1L, PROPERTY_ID, true);
                     succeeded.incrementAndGet();
                 } catch (GameException e) {
                     rejected.incrementAndGet();   // 이미 구매가 끝나 턴이 넘어간 뒤의 요청

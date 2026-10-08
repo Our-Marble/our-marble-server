@@ -66,7 +66,7 @@ class GameServiceIslandTest {
     void 주사위로_무인도_칸에_도착하면_영업정지가_시작되고_턴이_넘어간다() {
         GameService service = newService(5, 1, 2);   // 5 + 3 = 8
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(ISLAND_TILE);
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
@@ -78,7 +78,7 @@ class GameServiceIslandTest {
     void 더블로_무인도_칸에_도착해도_턴이_넘어간다() {
         GameService service = newService(6, 1, 1);   // 6 + 2 = 8, 더블
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
@@ -90,7 +90,7 @@ class GameServiceIslandTest {
         GameService service = newService(30, 1, 1);   // 30에서 더블 (원래라면 월급을 받는 이동)
         state().setConsecutiveDoubleCount(2);          // 앞서 더블이 두 번 나온 상태
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(ISLAND_TILE);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
@@ -105,7 +105,7 @@ class GameServiceIslandTest {
         GameService service = newService(ISLAND_TILE, 1, 2);
         state().getPlayerState(1L).setIslandTurnsRemaining(3);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(ISLAND_TILE);
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(2);
@@ -118,7 +118,7 @@ class GameServiceIslandTest {
         GameService service = newService(ISLAND_TILE, 1, 2);
         state().getPlayerState(1L).setIslandTurnsRemaining(1);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(ISLAND_TILE);
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isZero();
@@ -130,7 +130,7 @@ class GameServiceIslandTest {
         GameService service = newService(ISLAND_TILE, 1, 2);   // 8 + 3 = 11 (황금열쇠)
         state().getPlayerState(1L).setIslandTurnsRemaining(0);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(11);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DRAW_CARD);
@@ -142,14 +142,14 @@ class GameServiceIslandTest {
         GameService service = newService(ISLAND_TILE, 2, 2);   // 8 + 4 = 12 (땅 112)
         state().getPlayerState(1L).setIslandTurnsRemaining(3);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice( 1L);
 
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isZero();
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(12);
         assertThat(state().isDouble()).isFalse();
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
 
-        service.purchaseProperty(ROOM, 1L, 112, false);   // 거절하고 턴 종료
+        service.purchaseProperty( 1L, 112, false);   // 거절하고 턴 종료
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);   // 더블이었지만 추가 턴 없이 넘어감
     }
