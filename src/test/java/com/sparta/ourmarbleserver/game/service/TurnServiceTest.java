@@ -144,4 +144,90 @@ class TurnServiceTest {
 
         assertThat(state.isGameOver()).isTrue();
     }
+
+    @Test
+    void 파산하면_최종_등수는_그_시점의_생존자_수다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(1L));
+        assertThat(state.getPlayerState(1L).isBankrupt()).isTrue();
+        assertThat(state.getPlayerState(1L).getFinalRank()).isEqualTo(3);
+
+        service.eliminate(state, state.getPlayerState(2L));
+        assertThat(state.getPlayerState(2L).getFinalRank()).isEqualTo(2);
+    }
+
+    @Test
+    void 파산으로_한_명만_남으면_게임이_끝난다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(2L));
+        assertThat(state.isGameOver()).isFalse();
+
+        service.eliminate(state, state.getPlayerState(3L));
+        assertThat(state.isGameOver()).isTrue();
+    }
+
+    @Test
+    void 이미_파산한_플레이어는_다시_처리하지_않는다() {
+        service.startTurn(state, 1L);
+
+        service.eliminate(state, state.getPlayerState(1L));
+        service.eliminate(state, state.getPlayerState(1L));
+
+        assertThat(state.getPlayerState(1L).getFinalRank()).isEqualTo(3);
+        assertThat(state.isGameOver()).isFalse();
+    }
+
+    @Test
+    void 무인도_칸_번호를_찾는다() {
+        assertThat(service.findIslandPosition()).hasValue(8);
+    }
+
+    @Test
+    void 영업정지_중에_더블이_아니면_탈출_실패이고_남은_턴이_줄어든다() {
+        PlayerState player = state.getPlayerState(1L);
+        player.setPosition(8);
+        player.setIslandTurnsRemaining(3);
+
+        assertThat(service.failIslandEscape(player, false)).isTrue();
+        assertThat(player.getIslandTurnsRemaining()).isEqualTo(2);
+    }
+
+    @Test
+    void 더블이거나_영업정지가_없거나_무인도가_아니면_탈출_실패가_아니다() {
+        PlayerState player = state.getPlayerState(1L);
+        player.setPosition(8);
+        player.setIslandTurnsRemaining(3);
+        assertThat(service.failIslandEscape(player, true)).isFalse();    // 더블
+
+        player.setIslandTurnsRemaining(0);
+        assertThat(service.failIslandEscape(player, false)).isFalse();   // 영업정지 끝
+
+        player.setPosition(3);
+        player.setIslandTurnsRemaining(3);
+        assertThat(service.failIslandEscape(player, false)).isFalse();   // 무인도가 아님
+    }
+
+    @Test
+    void 무인도에서_더블이_나오면_영업정지가_풀리고_추가_턴은_없다() {
+        PlayerState player = state.getPlayerState(1L);
+        player.setPosition(8);
+        player.setIslandTurnsRemaining(3);
+        state.setDouble(true);
+
+        service.escapeIslandByDouble(state, player);
+
+        assertThat(player.getIslandTurnsRemaining()).isZero();
+        assertThat(state.isDouble()).isFalse();
+    }
+
+    @Test
+    void 무인도에_갇히면_영업정지_3턴이_시작된다() {
+        PlayerState player = state.getPlayerState(1L);
+
+        service.imprison(player);
+
+        assertThat(player.getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
+    }
 }

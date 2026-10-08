@@ -49,4 +49,8 @@ public class DiceService {
         }
         return result;
     }
+    /** 0 이상 bound 미만의 무작위 번호. (황금열쇠 카드 뽑기용) 주사위와 같은 Random을 쓴다. */
+    public int randomIndex(int bound) {
+        return random.nextInt(bound);
+    }
 }
