@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -9,6 +10,8 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -172,6 +175,14 @@ public class LobbyService {
     public synchronized void deleteRoom(String roomId) {
         findRoom(roomId);
         repository.deleteById(roomId);
+    }
+
+    /**
+     * 게임이 끝나면(GameEndedEvent) 방을 지운다. 게임 요청을 처리하는 도중에 불리므로 방이 없어도 예외를 던지지 않는다.
+     */
+    @EventListener
+    public synchronized void onGameEnded(GameEndedEvent event) {
+        repository.deleteById(event.roomId());
     }
 
     // ==== 도우미 ====
