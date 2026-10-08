@@ -10,7 +10,6 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
-import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
