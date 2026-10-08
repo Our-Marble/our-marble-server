@@ -72,7 +72,7 @@ public class GameService {
         PlayerState player = state.getPlayerState(playerId);
 
         DiceService.DiceResult dice = diceService.roll(state);
-        publisher.publishToRoom(roomId, MessageType.DICE_ROLLED,
+        publish(roomId, MessageType.DICE_ROLLED,
                 new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
         // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
@@ -129,7 +129,7 @@ public class GameService {
             property.setOwnerId(playerId);
         }
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTY_PURCHASED,
+        publish(roomId, MessageType.PROPERTY_PURCHASED,
                 new PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
@@ -173,7 +173,7 @@ public class GameService {
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
 
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
+        publish(roomId, MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
         turnService.endTurn(state);
 
         repository.save(state);
@@ -227,7 +227,7 @@ public class GameService {
             property.setBuildingLevel(nextLevel);
         }
 
-        publisher.publishToRoom(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
+        publish(roomId, MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         repository.save(state);
@@ -259,7 +259,7 @@ public class GameService {
             property.setOwnerId(playerId);
         }
 
-        publisher.publishToRoom(roomId, MessageType.PROPERTY_ACQUIRED,
+        publish(roomId, MessageType.PROPERTY_ACQUIRED,
                 new PropertyAcquiredPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
@@ -280,7 +280,7 @@ public class GameService {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
 
-        publisher.publishToRoom(roomId, MessageType.DESTINATION_CHOSEN,
+        publish(roomId, MessageType.DESTINATION_CHOSEN,
                 new DestinationChosenPayload(playerId, destinationPosition));
 
         moveService.moveDirectly(player, destinationPosition);
@@ -307,7 +307,7 @@ public class GameService {
             return;
         }
         CardData card = cards.get(diceService.randomIndex(cards.size()));
-        publisher.publishToRoom(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
+        publish(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
 
         applyCardEffect(state, player, card);
 
@@ -356,6 +356,7 @@ public class GameService {
         OptionalInt island = turnService.findIslandPosition();
         if (island.isEmpty()) {
             turnService.endTurn(state);
+            return;
         }
         moveService.moveDirectly(player, island.getAsInt());
         processArrival(state, player);
@@ -492,4 +493,12 @@ public class GameService {
         return gameDataService.getTiles().get(position);
     }
 
+    /**
+     * 방 전원에게 알림을 보낸다.
+     * TODO(네트워크): 실제 EventPublisher가 확정되기 전까지 알림이 나가지 않도록 호출을 주석 처리했다.
+     * 확정되면 아래 줄의 주석을 풀고, EventPublisher 모양이 바뀌었으면 여기만 고친다.
+     */
+    private void publish(String roomId, MessageType type, Object payload) {
+        //publisher.publishToRoom(roomId,type, payload);
+    }
 }
