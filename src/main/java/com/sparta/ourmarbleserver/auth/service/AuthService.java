@@ -1,10 +1,10 @@
 package com.sparta.ourmarbleserver.auth.service;
 
 import com.sparta.ourmarbleserver.auth.dto.LoginRequest;
-import com.sparta.ourmarbleserver.auth.dto.MemberResponse;
+import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.dto.SignupRequest;
-import com.sparta.ourmarbleserver.auth.entity.Member;
-import com.sparta.ourmarbleserver.auth.repository.MemberRepository;
+import com.sparta.ourmarbleserver.auth.entity.Player;
+import com.sparta.ourmarbleserver.auth.repository.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -14,31 +14,41 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
-    private final MemberRepository memberRepository;
+    private final PlayerRepository playerRepository;
 
     @Transactional
-    public MemberResponse signup(SignupRequest request) {
-        Member member = memberRepository.save(new Member(request.getEmail(), request.getPassword()));
-        return new MemberResponse(member.getId(), member.getEmail());
+    public PlayerResponse signup(SignupRequest request) {
+        Player player = playerRepository.save(
+                new Player(request.getEmail(), request.getPassword(), request.getNickname())
+        );
+        return toResponse(player);
     }
 
     @Transactional(readOnly = true)
-    public MemberResponse authenticate(LoginRequest request) {
-        Member member = memberRepository.findByEmail(request.getEmail())
+    public PlayerResponse authenticate(LoginRequest request) {
+        Player player = playerRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        if (!member.getPassword().equals(request.getPassword())) {
+        if (!player.getPassword().equals(request.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
-        return new MemberResponse(member.getId(), member.getEmail());
+        return toResponse(player);
     }
 
     @Transactional(readOnly = true)
-    public MemberResponse requireMember(Long memberId) {
+    public PlayerResponse requireMember(Long memberId) {
         if (memberId == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
-        Member member = memberRepository.findById(memberId)
+        Player player = playerRepository.findById(memberId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        return new MemberResponse(member.getId(), member.getEmail());
+        return toResponse(player);
+    }
+
+    private PlayerResponse toResponse(Player player) {
+        return new PlayerResponse(
+                player.getId(),
+                player.getEmail(),
+                player.getPlayRecord().getNickname()
+        );
     }
 }
