@@ -11,6 +11,7 @@ public enum ErrorCode {
     INVALID_STATE("지금은 할 수 없는 요청입니다."),
     NOT_ENOUGH_MONEY("현금이 부족합니다."),
     INVALID_PROPERTY("올바르지 않은 땅입니다."),
+    INVALID_MESSAGE("메시지 형식이 올바르지 않습니다."), // 네트워크: JSON이 아니거나 topic/type이 없거나 모르는 값
 
     // 경제·부동산 추가
     ALREADY_OWNED("이미 주인이 있는 땅입니다."),
