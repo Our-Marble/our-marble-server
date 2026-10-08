@@ -1,9 +1,8 @@
 package com.sparta.ourmarbleserver.game.service;
 
+import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.dto.DiceRolledPayload;
-import com.sparta.ourmarbleserver.game.dto.PropertyData;
-import com.sparta.ourmarbleserver.game.dto.TileData;
+import com.sparta.ourmarbleserver.game.dto.*;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -16,20 +15,19 @@ import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 현재 처리하는 요청: OLL_DICE, PURCHASE_PROPERTY로, EconomyService. 나머지 요청은 단계별로 추가한다.
+ * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION, DRAW_CARD
  */
 @Service
+@RequiredArgsConstructor
 public class GameService implements MessageHandler {
 
     /** 초기 자금 */
@@ -42,27 +40,14 @@ public class GameService implements MessageHandler {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
-    private final List<TileData> tiles;
-
-    public GameService(GameStateRepository repository, EventPublisher publisher, DiceService diceService,
-                       MoveService moveService, TurnService turnService,EconomyService economyService, PropertyService propertyService, GameDataService gameDataService) {
-        this.repository = repository;
-        this.publisher = publisher;
-        this.diceService = diceService;
-        this.moveService = moveService;
-        this.turnService = turnService;
-        this.economyService = economyService;
-        this.propertyService = propertyService;
-        this.gameDataService = gameDataService;
-        this.tiles = gameDataService.getTiles();
-    }
 
     // ==== 요청 받기 ====
 
     @Override
     public Set<MessageType> types() {
         return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
-                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY);
+                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION,
+                MessageType.DRAW_CARD);
     }
 
     @Override
@@ -73,6 +58,8 @@ public class GameService implements MessageHandler {
             case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
             case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
+            case CHOOSE_DESTINATION -> chooseDestination(roomId,playerId,requireDestination(payload));
+            case DRAW_CARD -> drawCard(roomId, playerId);
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -92,7 +79,7 @@ public class GameService implements MessageHandler {
             state.addProperty(new PropertyState(data.id()));
         }
 
-        turnService.startTurn(state, playerIds.get(0));
+        turnService.startTurn(state, playerIds.getFirst());
         repository.save(state);
         return state;
     }
@@ -102,6 +89,7 @@ public class GameService implements MessageHandler {
     /**
      * 주사위를 굴리고 이동한 뒤 도착 칸에 따라 다음 phase를 정한다.
      * 알림은 DICE_ROLLED 하나만 나간다. 이동과 월급은 클라가 같은 규칙으로 계산한다.
+     * 무인도 영업정지 중이면 더블이 아닐 때 이동 없이 턴이 넘어가고, 3연속 더블이면 무인도로 간다.
      */
     public void rollDice(String roomId, long playerId) {
         GameState state = validate(roomId, playerId, TurnPhase.AWAITING_ROLL);
@@ -111,7 +99,24 @@ public class GameService implements MessageHandler {
         publisher.publishToRoom(roomId, MessageType.DICE_ROLLED,
                 new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
-        // TODO(특수칸): 3연속 더블이면 이동 없이 무인도로, 무인도에 있으면 더블 탈출 처리
+        // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
+        if (turnService.failIslandEscape(player, state.isDouble())) {
+            turnService.passTurn(state);
+            repository.save(state);
+            return;
+        }
+        turnService.escapeIslandByDouble(state, player);
+
+        // 3연속 더블이면 이동하지 않고 무인도로 간다. (월급 없음, 도착 처리에서 영업정지 시작과 턴 넘김)
+        OptionalInt island = turnService.findIslandPosition();
+        if(state.getConsecutiveDoubleCount() >= 3 && island.isPresent()) {
+            state.setDouble(false);
+            state.setConsecutiveDoubleCount(0);
+            moveService.moveDirectly(player, island.getAsInt());
+            processArrival(state, player);
+            repository.save(state);
+            return;
+        }
 
         MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
         if (move.passedStart()) {
@@ -186,7 +191,7 @@ public class GameService implements MessageHandler {
             throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
         }
 
-        // 검증이 모두 끝났으니 상태를 바꾼다,
+        // 검증이 모두 끝났으니 상태를 바꾼다.
         selected.forEach(PropertyState::reset);
         economyService.deposit(payer, proceeds);
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
@@ -201,7 +206,7 @@ public class GameService implements MessageHandler {
 
     /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
     private PropertyState findTollProperty(GameState state, PlayerState payer) {
-        TileData tile = tiles.get(payer.getPosition());
+        TileData tile = tileAt(payer.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
@@ -285,18 +290,122 @@ public class GameService implements MessageHandler {
         repository.save(state);
     }
 
+    // ===== 세계여행 =====
 
+    /**
+     * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
+     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
+     */
+    public void chooseDestination(String roomId, long playerId, int destinationPosition) {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DESTINATION);
+        PlayerState player = state.getPlayerState(playerId);
+
+        if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+
+        publisher.publishToRoom(roomId, MessageType.DESTINATION_CHOSEN,
+                new DestinationChosenPayload(playerId, destinationPosition));
+
+        moveService.moveDirectly(player, destinationPosition);
+        processArrival(state, player);
+
+        repository.save(state);
+    }
+
+    // ===== 황금열쇠 =====
+
+    /**
+     * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
+     * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
+     */
+    public void drawCard(String roomId, long playerId)
+    {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DRAW_CARD);
+        PlayerState player = state.getPlayerState(playerId);
+
+        List<CardData> cards = gameDataService.getCards();
+        if (cards.isEmpty()) {
+            turnService.endTurn(state); // 카드가 없으면 턴이 멈추지 않도록 종료한다.
+            repository.save(state);
+            return;
+        }
+        CardData card = cards.get(diceService.randomIndex(cards.size()));
+        publisher.publishToRoom(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
+
+        applyCardEffect(state, player, card);
+
+        repository.save(state);
+    }
+    /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
+    private void applyCardEffect(GameState state, PlayerState player, CardData card) {
+        switch (card.effectType()) {
+            case "Bonus" -> {
+                economyService.deposit(player, card.amount());
+                turnService.endTurn(state);
+            }
+            case "Penalty" -> {
+                economyService.payPenalty(state, player, card.amount(), card.penaltyToFestivalPool());
+                turnService.endTurn(state);
+            }
+            case "MoveTo" -> {
+                MoveService.MoveResult move = moveService.moveTo(player, card.targetTileId());
+                if (move.passedStart()) {
+                    economyService.paySalary(player);
+                }
+                processArrival(state, player);
+            }
+            case "MoveBy" -> moveByCard(state, player, card.steps());
+            case "GoToInspection" -> goToIsland(state, player);
+            default -> turnService.endTurn(state); // 알 수 없는 효과는 턴이 멈추지 않도록 종료한다.
+        }
+    }
+
+    /** N칸 이동 카드. 양수면 앞으로(출발 지점을 지나면 월급), 음수면 뒤로(월급 없음). */
+    private void moveByCard(GameState state, PlayerState player, int steps) {
+        if (steps > 0) {
+            MoveService.MoveResult move = moveService.moveBy(player, steps);
+            if (move.passedStart()) {
+                economyService.paySalary(player);
+            }
+        } else {
+            int size = moveService.getTileCount();
+            moveService.moveDirectly(player, ((player.getPosition() + steps) % size + size) % size);
+        }
+        processArrival(state, player);
+    }
+
+    /** 무인도 카드. 월급 없이 무인도로 가고, 도착 처리에서 영업정지가 시작되고 턴이 넘어간다. */
+    private void goToIsland(GameState state, PlayerState player) {
+        OptionalInt island = turnService.findIslandPosition();
+        if (island.isEmpty()) {
+            turnService.endTurn(state);
+        }
+        moveService.moveDirectly(player, island.getAsInt());
+        processArrival(state, player);
+    }
 
     // ===== 도착 칸 처리 =====
 
     private void processArrival(GameState state, PlayerState player) {
-        TileData tile = tiles.get(player.getPosition());
+        TileData tile = tileAt(player.getPosition());
         switch (tile.type()) {
             case "PROPERTY" -> arriveAtProperty(state, player, tile.propertyId());
             case "GOLDEN_KEY" -> state.setPhase(TurnPhase.AWAITING_DRAW_CARD);
-
-            // TODO(특수칸): 출발(효과없음), 무인도, 기부금 수령(적립금), 세무조사, 세계여행, 그때까지만 턴만 넘긴다.
-
+            case "START" -> turnService.endTurn(state); //효과 없음(월급은 이동할 때 이미 지급됨)
+            case "CHARITY" -> {
+                economyService.receiveWelfareFund(state, player);
+                turnService.endTurn(state);
+            }
+            case "DONATION" -> {
+                economyService.payTax(state, player, EconomyService.TAX_AMOUNT);
+                turnService.endTurn(state);
+            }
+            case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
+            case "ISLAND" -> {
+                turnService.imprison(player);
+                turnService.passTurn(state); // 강제로 턴을 넘긴다.
+            }
             default -> turnService.endTurn(state);
         }
     }
@@ -403,6 +512,15 @@ public class GameService implements MessageHandler {
         return propertyIds;
     }
 
+    /** payload에서 destinationPosition을 읽는다. 없거나 숫자가 아니면 올바르지 않은 칸으로 거부한다. */
+    private static int requireDestination(JsonNode payload) {
+        JsonNode node = payload == null ? null : payload.get("destinationPosition");
+        if (node == null || !node.isNumber()) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+        return node.intValue();
+    }
+
     // ===== 공통 검증 =====
 
     private GameState validate(String roomId, long playerId, TurnPhase requiredPhase) {
@@ -435,11 +553,14 @@ public class GameService implements MessageHandler {
     }
 
     /** 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다. */
-    private void requireStandingOn (PlayerState player, int propertyId) {
-        TileData tile = tiles.get(player.getPosition());
+    private void requireStandingOn(PlayerState player, int propertyId) {
+        TileData tile = tileAt(player.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
+    }
+    private TileData tileAt(int position) {
+        return gameDataService.getTiles().get(position);
     }
 
 }

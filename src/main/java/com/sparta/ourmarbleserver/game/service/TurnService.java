@@ -4,25 +4,27 @@ import com.sparta.ourmarbleserver.game.dto.TileData;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.OptionalInt;
 
 /**
  * 턴 전환을 맡는다. (클라 HandleTurnChanged / ProcessEndTurn / GetNextPlayerId / GetNextRound)
  * 상태만 바꾸고, 알림 전송과 저장은 GameService가 한다. 게임이 끝나면 state.isGameOver()가 true가 된다.
  */
 @Service
+@RequiredArgsConstructor
 public class TurnService {
     /** 최대 라운드. 이 라운드를 넘기면 게임이 끝난다. */
     public static final int MAX_ROUND = 30;
+    /** 무인도 영업정지 턴 수 */
+    public static final int ISLAND_TURNS = 3;
+    public static final String ISLAND = "ISLAND";
     private static final String WORLD_TRAVEL = "WORLD_TRAVEL";
 
-    private final List<TileData> tiles;
-
-    public TurnService(GameDataService gameDataService) {
-        this.tiles = gameDataService.getTiles();
-    }
+    private final GameDataService gameDataService;
 
     /** 턴 종료. 더블이면 같은 플레이어가 다시 굴리고, 아니면 다음 플레이어로 넘어간다. (클라 ProcessEndTurn) */
     public void endTurn(GameState state) {
@@ -104,6 +106,48 @@ public class TurnService {
         }
     }
 
+    // ===== 무인도 =====
+
+    /** 무인도 칸 번호. 보드에 없으면 empty */
+    public OptionalInt findIslandPosition() {
+        List<TileData> tiles = gameDataService.getTiles();
+        for (int i=0; i<tiles.size(); i++) {
+            if (ISLAND.equals(tiles.get(i).type())) {
+                return OptionalInt.of(i);
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    public boolean isOnIsland(PlayerState player) {
+        return ISLAND.equals(gameDataService.getTiles().get(player.getPosition()).type());
+    }
+
+    /**
+     * 탈출 실패 판정. 무인도에 있고 영업정지가 남았는데 더블이 아니면 남은 턴을 하나 줄인다.
+     * 실패하면 true이고, 이동 없이 턴이 넘어가야 한다. (남은 턴이 0이 되는 굴림도 실패로 넘어가고, 다음 턴부터 움직인다)
+     */
+    public boolean failIslandEscape(PlayerState player, boolean isDouble) {
+        if (!isOnIsland(player) || player.getIslandTurnsRemaining() <= 0 || isDouble) {
+            return false;
+        }
+        player.setIslandTurnsRemaining(player.getIslandTurnsRemaining() - 1);
+        return true;
+    }
+
+    /** 더블 탈출. 무인도에서 더블이 나오면 영업정지를 풀고, 추가 턴은 주지 않는다. */
+    public void escapeIslandByDouble(GameState state, PlayerState player) {
+        if (isOnIsland(player) && state.isDouble()) {
+            player.setIslandTurnsRemaining(0);
+            state.setDouble(false);
+        }
+    }
+
+    /** 무인도에 도착하면 영업정지가 시작된다. */
+    public void imprison(PlayerState player) {
+        player.setIslandTurnsRemaining(ISLAND_TURNS);
+    }
+
     /** 다음 차례가 몇 라운드인지. 턴 순서가 처음으로 돌아오면 1 늘어난다. (첫 턴은 1라운드) */
     int getNextRound(GameState state, long nextPlayerId) {
         if (state.getRoundNumber() == 0) {
@@ -116,6 +160,6 @@ public class TurnService {
     }
 
     private boolean isOnWorldTravel(PlayerState player) {
-        return WORLD_TRAVEL.equals(tiles.get(player.getPosition()).type());
+        return WORLD_TRAVEL.equals(gameDataService.getTiles().get(player.getPosition()).type());
     }
 }

@@ -75,4 +75,13 @@ class DiceServiceTest {
         assertThat(state.isDouble()).isFalse();
         assertThat(state.getConsecutiveDoubleCount()).isZero();
     }
+
+    @Test
+    void 무작위_번호는_0이상_bound_미만이다() {
+        DiceService service = new DiceService();
+
+        for (int i = 0; i < 1000; i++) {
+            assertThat(service.randomIndex(5)).isBetween(0, 4);
+        }
+    }
 }
