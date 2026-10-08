@@ -22,6 +22,13 @@ public class MoveService {
         return new MoveResult(from, to, to < from);
     }
 
+    /** 지정한 칸으로 앞으로 이동한다. 칸 번호가 출발 때보다 작으면 출발 지점을 지난 것이다. (MoveTo 카드) */
+    public MoveResult moveTo(PlayerState player, int target) {
+        int from = player.getPosition();
+        player.setPosition(target);
+        return new MoveResult(from, target, target < from);
+    }
+
     /** 칸으로 바로 이동한다. 월급은 없다. (무인도 이동, 세계여행, 뒤로가는 카드) */
     public MoveResult moveDirectly(PlayerState player, int target) {
         int from = player.getPosition();

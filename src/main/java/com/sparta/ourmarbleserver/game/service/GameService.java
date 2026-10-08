@@ -1,10 +1,8 @@
 package com.sparta.ourmarbleserver.game.service;
 
+import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.dto.DestinationChosenPayload;
-import com.sparta.ourmarbleserver.game.dto.DiceRolledPayload;
-import com.sparta.ourmarbleserver.game.dto.PropertyData;
-import com.sparta.ourmarbleserver.game.dto.TileData;
+import com.sparta.ourmarbleserver.game.dto.*;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -26,7 +24,7 @@ import java.util.*;
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION
+ * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION, DRAW_CARD
  */
 @Service
 @RequiredArgsConstructor
@@ -48,7 +46,8 @@ public class GameService implements MessageHandler {
     @Override
     public Set<MessageType> types() {
         return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
-                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION);
+                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION,
+                MessageType.DRAW_CARD);
     }
 
     @Override
@@ -60,6 +59,7 @@ public class GameService implements MessageHandler {
             case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
             case CHOOSE_DESTINATION -> chooseDestination(roomId,playerId,requireDestination(payload));
+            case DRAW_CARD -> drawCard(roomId, playerId);
             default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
         }
     }
@@ -311,6 +311,78 @@ public class GameService implements MessageHandler {
         processArrival(state, player);
 
         repository.save(state);
+    }
+
+    // ===== 황금열쇠 =====
+
+    /**
+     * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
+     * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
+     */
+    public void drawCard(String roomId, long playerId)
+    {
+        GameState state = validate(roomId, playerId, TurnPhase.AWAITING_DRAW_CARD);
+        PlayerState player = state.getPlayerState(playerId);
+
+        List<CardData> cards = gameDataService.getCards();
+        if (cards.isEmpty()) {
+            turnService.endTurn(state); // 카드가 없으면 턴이 멈추지 않도록 종료한다.
+            repository.save(state);
+            return;
+        }
+        CardData card = cards.get(diceService.randomIndex(cards.size()));
+        publisher.publishToRoom(roomId, MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
+
+        applyCardEffect(state, player, card);
+
+        repository.save(state);
+    }
+    /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
+    private void applyCardEffect(GameState state, PlayerState player, CardData card) {
+        switch (card.effectType()) {
+            case "Bonus" -> {
+                economyService.deposit(player, card.amount());
+                turnService.endTurn(state);
+            }
+            case "Penalty" -> {
+                economyService.payPenalty(state, player, card.amount(), card.penaltyToFestivalPool());
+                turnService.endTurn(state);
+            }
+            case "MoveTo" -> {
+                MoveService.MoveResult move = moveService.moveTo(player, card.targetTileId());
+                if (move.passedStart()) {
+                    economyService.paySalary(player);
+                }
+                processArrival(state, player);
+            }
+            case "MoveBy" -> moveByCard(state, player, card.steps());
+            case "GoToInspection" -> goToIsland(state, player);
+            default -> turnService.endTurn(state); // 알 수 없는 효과는 턴이 멈추지 않도록 종료한다.
+        }
+    }
+
+    /** N칸 이동 카드. 양수면 앞으로(출발 지점을 지나면 월급), 음수면 뒤로(월급 없음). */
+    private void moveByCard(GameState state, PlayerState player, int steps) {
+        if (steps > 0) {
+            MoveService.MoveResult move = moveService.moveBy(player, steps);
+            if (move.passedStart()) {
+                economyService.paySalary(player);
+            }
+        } else {
+            int size = moveService.getTileCount();
+            moveService.moveDirectly(player, ((player.getPosition() + steps) % size + size) % size);
+        }
+        processArrival(state, player);
+    }
+
+    /** 무인도 카드. 월급 없이 무인도로 가고, 도착 처리에서 영업정지가 시작되고 턴이 넘어간다. */
+    private void goToIsland(GameState state, PlayerState player) {
+        OptionalInt island = turnService.findIslandPosition();
+        if (island.isEmpty()) {
+            turnService.endTurn(state);
+        }
+        moveService.moveDirectly(player, island.getAsInt());
+        processArrival(state, player);
     }
 
     // ===== 도착 칸 처리 =====

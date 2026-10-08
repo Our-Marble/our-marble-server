@@ -104,4 +104,30 @@ class EconomyServiceTest {
         assertThat(service.receiveWelfareFund(state, player)).isZero();
         assertThat(player.getMoney()).isEqualTo(100_000);
     }
+
+    @Test
+    void 현금_한도_안에서만_낸다() {
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(30_000);
+
+        long paid = service.payWithinBalance(player, 100_000);
+
+        assertThat(paid).isEqualTo(30_000);
+        assertThat(player.getMoney()).isZero();
+    }
+
+    @Test
+    void 벌금은_은행으로_가거나_적립금에_쌓인다() {
+        GameState state = new GameState("r1");
+        PlayerState player = new PlayerState(1L);
+        player.setMoney(500_000);
+
+        service.payPenalty(state, player, 100_000, false);
+        assertThat(player.getMoney()).isEqualTo(400_000);
+        assertThat(state.getWelfareFund()).isZero();
+
+        service.payPenalty(state, player, 50_000, true);
+        assertThat(player.getMoney()).isEqualTo(350_000);
+        assertThat(state.getWelfareFund()).isEqualTo(50_000);
+    }
 }

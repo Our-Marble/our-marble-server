@@ -79,4 +79,24 @@ class MoveServiceTest {
         assertThat(result.passedStart()).isFalse();
         assertThat(player.getPosition()).isEqualTo(8);
     }
+
+    @Test
+    void 지정한_칸으로_앞으로_이동할_때_출발_지점을_지나면_월급_대상이다() {
+        player.setPosition(10);
+
+        MoveResult result = service.moveTo(player, 2);
+
+        assertThat(result.to()).isEqualTo(2);
+        assertThat(result.passedStart()).isTrue();
+        assertThat(player.getPosition()).isEqualTo(2);
+    }
+
+    @Test
+    void 지정한_칸이_앞에_있으면_월급_대상이_아니다() {
+        player.setPosition(2);
+
+        MoveResult result = service.moveTo(player, 10);
+
+        assertThat(result.passedStart()).isFalse();
+    }
 }

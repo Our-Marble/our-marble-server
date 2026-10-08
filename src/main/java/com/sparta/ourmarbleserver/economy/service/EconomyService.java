@@ -50,6 +50,22 @@ public class EconomyService {
         return paid;
     }
 
+    /** 현금 한도 안에서만 비용을 낸다. (벌금 등, 매각·파산 없음) 실제로 낸 금액을 돌려준다. */
+    public long payWithinBalance(PlayerState player, long amount) {
+        long paid = Math.min(amount,Math.max(0, player.getMoney()));
+        player.addMoney(-paid);
+        return paid;
+    }
+
+    /** 벌금을 현금 한도 안에서 낸다. toWelfareFund가 true면 적립금에 쌓고, false면 은행으로 간다. */
+    public long payPenalty(GameState state, PlayerState player, long amount, boolean toWelfareFund) {
+        long paid = payWithinBalance(player, amount);
+        if (toWelfareFund) {
+            state.setWelfareFund(state.getWelfareFund() + paid);
+        }
+        return paid;
+    }
+
     /** 쌓인 적립금 전액을 받는다. 받은 금액을 돌려주고 적립금은 0이 된다. */
     public long receiveWelfareFund(GameState state, PlayerState player) {
         long amount = state.getWelfareFund();
