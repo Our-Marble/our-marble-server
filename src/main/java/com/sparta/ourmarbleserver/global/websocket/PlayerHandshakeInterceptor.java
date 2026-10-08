@@ -44,7 +44,7 @@ public class PlayerHandshakeInterceptor implements HandshakeInterceptor {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
-        attributes.put(GameWebSocketHandler.PLAYER_ID_ATTRIBUTE, playerId);
+        attributes.put(MainWebSocketHandler.PLAYER_ID_ATTRIBUTE, playerId);
         return true;
     }
 
