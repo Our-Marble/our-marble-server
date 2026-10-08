@@ -8,7 +8,6 @@ import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.EventPublisher;
-import com.sparta.ourmarbleserver.global.transport.MessageHandler;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
@@ -17,18 +16,18 @@ import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
 
 import java.util.*;
 
 /**
  * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
- * 처리하는 요청: ROLL_DICE, PURCHASE_PROPERTY, SELL_PROPERTIES, BUILD, ACQUIRE_PROPERTY, CHOOSE_DESTINATION, DRAW_CARD
+ * 요청 type 분류와 요청 본문 읽기는 하지 않는다. MessageRouter가 type별로 아래 함수를 직접 호출한다.
+ * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
  */
 @Service
 @RequiredArgsConstructor
-public class GameService implements MessageHandler {
+public class GameService {
 
     /** 초기 자금 */
     public static final long START_MONEY = 500_000;
@@ -40,29 +39,6 @@ public class GameService implements MessageHandler {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
-
-    // ==== 요청 받기 ====
-
-    @Override
-    public Set<MessageType> types() {
-        return Set.of(MessageType.ROLL_DICE, MessageType.PURCHASE_PROPERTY, MessageType.SELL_PROPERTIES,
-                MessageType.BUILD, MessageType.ACQUIRE_PROPERTY, MessageType.CHOOSE_DESTINATION,
-                MessageType.DRAW_CARD);
-    }
-
-    @Override
-    public void handle(MessageType type, String roomId, long playerId, JsonNode payload) {
-        switch (type) {
-            case ROLL_DICE -> rollDice(roomId,playerId);
-            case PURCHASE_PROPERTY -> purchaseProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case SELL_PROPERTIES -> sellProperties(roomId, playerId, requirePropertyIds(payload));
-            case BUILD -> build(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case ACQUIRE_PROPERTY -> acquireProperty(roomId, playerId, requirePropertyId(payload), requireAccept(payload));
-            case CHOOSE_DESTINATION -> chooseDestination(roomId,playerId,requireDestination(payload));
-            case DRAW_CARD -> drawCard(roomId, playerId);
-            default -> throw new IllegalStateException("GameService가 처리하지 않는 요청입니다.: " + type);
-        }
-    }
 
     // ===== 게임 시작 (로비 담당 연동 전 임시) =====
 
@@ -472,53 +448,6 @@ public class GameService implements MessageHandler {
 
         turnService.eliminate(state, payer);
         turnService.passTurn(state);
-    }
-
-    // ===== 요청 본문 읽기 =====
-
-    /** payload에서 propertyId를 읽는다. 없거나 숫자가 아니면 올바르지 않은 땅으로 거부한다. */
-
-    private static int requirePropertyId(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("propertyId");
-        if(node == null || !node.isNumber()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
-        }
-        return node.intValue();
-    }
-
-    /** payload에서 isAccept를 읽는다. 빠졌으면 실수로 사거나 거절하지 않도록 거부한다. */
-    private static boolean requireAccept(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("isAccept");
-        if(node == null || !node.isBoolean()) {
-            throw new GameException(ErrorCode.INVALID_STATE);
-        }
-        return node.booleanValue();
-    }
-
-    /** payload에서 propertyIds를 읽는다. 없거나 배열이 아니거나 숫자가 아닌 값이 있으면 목록 오류로 거부한다. */
-    private static List<Integer> requirePropertyIds(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("propertyIds");
-        if (node == null || !node.isArray()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
-        }
-        List<Integer> propertyIds = new ArrayList<>();
-        for (int i = 0; i < node.size(); ++i) {
-            JsonNode element = node.get(i);
-            if (!element.isNumber()) {
-                throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
-            }
-            propertyIds.add(element.intValue());
-        }
-        return propertyIds;
-    }
-
-    /** payload에서 destinationPosition을 읽는다. 없거나 숫자가 아니면 올바르지 않은 칸으로 거부한다. */
-    private static int requireDestination(JsonNode payload) {
-        JsonNode node = payload == null ? null : payload.get("destinationPosition");
-        if (node == null || !node.isNumber()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
-        }
-        return node.intValue();
     }
 
     // ===== 공통 검증 =====

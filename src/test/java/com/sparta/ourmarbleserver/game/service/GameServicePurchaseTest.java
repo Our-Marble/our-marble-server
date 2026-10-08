@@ -19,7 +19,6 @@ import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 땅 구매·거절(PURCHASE_PROPERTY) 테스트. 플레이어 1이 3번 칸(땅 103)에서 구매를 고르는 상태에서 시작한다. */
@@ -172,23 +171,4 @@ class GameServicePurchaseTest {
         assertRejected(() -> service.purchaseProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
     }
 
-    @Test
-    void handle로_구매_요청을_처리한다() throws Exception {
-        GameService service = newService();
-
-        assertThat(service.types()).contains(MessageType.PURCHASE_PROPERTY);
-        service.handle(MessageType.PURCHASE_PROPERTY, ROOM, 1L,
-                mapper.readTree("{\"propertyId\":103,\"isAccept\":true}"));
-
-        assertThat(state().getPropertyState(PROPERTY_ID).orElseThrow().isOwnedBy(1L)).isTrue();
-    }
-
-    @Test
-    void 요청_본문에_isAccept가_없으면_거부된다() throws Exception {
-        GameService service = newService();
-        JsonNode body = mapper.readTree("{\"propertyId\":103}");
-
-        assertRejected(() -> service.handle(MessageType.PURCHASE_PROPERTY, ROOM, 1L, body), ErrorCode.INVALID_STATE);
-        assertThat(publisher.events()).isEmpty();
-    }
 }

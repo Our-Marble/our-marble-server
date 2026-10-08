@@ -21,7 +21,6 @@ import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -189,25 +188,4 @@ class GameServiceSellTest {
         assertRejected(() -> service.sellProperties(ROOM, 2L, List.of(101)), ErrorCode.NOT_YOUR_TURN);
     }
 
-    @Test
-    void handle로_매각_요청을_처리한다() throws Exception {
-        GameService service = newService();
-
-        assertThat(service.types()).contains(MessageType.SELL_PROPERTIES);
-        service.handle(MessageType.SELL_PROPERTIES, ROOM, 1L, mapper.readTree("{\"propertyIds\":[101]}"));
-
-        assertThat(property(101).hasOwner()).isFalse();
-    }
-
-    @Test
-    void 요청_본문에_propertyIds가_없거나_배열이_아니면_거부된다() throws Exception {
-        GameService service = newService();
-        JsonNode missing = mapper.readTree("{}");
-        JsonNode notArray = mapper.readTree("{\"propertyIds\":101}");
-
-        assertRejected(() -> service.handle(MessageType.SELL_PROPERTIES, ROOM, 1L, missing),
-                ErrorCode.INVALID_PROPERTY_LIST);
-        assertRejected(() -> service.handle(MessageType.SELL_PROPERTIES, ROOM, 1L, notArray),
-                ErrorCode.INVALID_PROPERTY_LIST);
-    }
 }
