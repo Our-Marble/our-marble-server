@@ -152,4 +152,21 @@ class GameServiceIslandTest {
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);   // 더블이었지만 추가 턴 없이 넘어감
     }
+
+    @Test
+    void 영업정지가_끝난_뒤_무인도_칸에서_더블이_나오면_이동하고_추가_턴도_받는다() {
+        GameService service = newService(ISLAND_TILE, 2, 2);   // 8 + 4 = 12 (땅 112)
+        state().getPlayerState(1L).setIslandTurnsRemaining(0);
+
+        service.rollDice(1L);
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(12);
+        assertThat(state().isDouble()).isTrue();
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
+
+        service.purchaseProperty(1L, 112, false);   // 거절하고 턴 종료
+
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);   // 더블이라 같은 플레이어가 다시 굴림
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
+    }
 }

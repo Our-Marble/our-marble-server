@@ -223,6 +223,19 @@ class TurnServiceTest {
     }
 
     @Test
+    void 영업정지가_끝난_뒤_무인도_칸에서_더블이_나와도_더블_상태가_유지된다() {
+        PlayerState player = state.getPlayerState(1L);
+        player.setPosition(8);
+        player.setIslandTurnsRemaining(0);
+        state.setDouble(true);
+
+        service.escapeIslandByDouble(state, player);
+
+        assertThat(player.getIslandTurnsRemaining()).isZero();
+        assertThat(state.isDouble()).isTrue();
+    }
+
+    @Test
     void 무인도에_갇히면_영업정지_3턴이_시작된다() {
         PlayerState player = state.getPlayerState(1L);
 

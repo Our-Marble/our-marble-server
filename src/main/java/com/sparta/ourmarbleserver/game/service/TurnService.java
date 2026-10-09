@@ -135,9 +135,9 @@ public class TurnService {
         return true;
     }
 
-    /** 더블 탈출. 무인도에서 더블이 나오면 영업정지를 풀고, 추가 턴은 주지 않는다. */
+    /** 더블 탈출. 영업정지가 남은 채 무인도에서 더블이 나오면 영업정지를 풀고, 추가 턴은 주지 않는다. (영업정지가 끝났으면 평범한 더블이라 추가 턴이 유지된다) */
     public void escapeIslandByDouble(GameState state, PlayerState player) {
-        if (isOnIsland(player) && state.isDouble()) {
+        if (isOnIsland(player) && player.getIslandTurnsRemaining() > 0 && state.isDouble()) {
             player.setIslandTurnsRemaining(0);
             state.setDouble(false);
         }
