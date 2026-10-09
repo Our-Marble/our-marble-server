@@ -358,4 +358,44 @@ class LobbyServiceTest {
 
         assertThat(service.createRoom(HOST, MAP, 4).roomId()).isNotEqualTo(room.roomId());
     }
+
+
+    // ===== 플레이어로 방 찾기 =====
+
+    @Test
+    void 플레이어가_들어_있는_방을_찾는다() {
+        RoomInfo room = roomWithTwo();
+
+        assertThat(service.findRoomByPlayer(HOST).roomId()).isEqualTo(room.roomId());
+        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(room.roomId());
+    }
+
+    @Test
+    void 어느_방에도_없으면_NOT_IN_ROOM() {
+        service.createRoom(HOST, MAP, 4);
+
+        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
+    }
+
+    @Test
+    void 방에서_나가거나_방이_삭제되면_NOT_IN_ROOM() {
+        RoomInfo room = roomWithTwo();
+
+        service.leave(room.roomId(), P2);
+        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
+
+        service.deleteRoom(room.roomId());
+        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(HOST));
+    }
+
+    @Test
+    void 시작한_방과_대기_방에_같이_있으면_대기_방을_찾는다() {
+        RoomInfo started = roomWithTwo();
+        service.setReady(started.roomId(), P2, true);
+        service.start(started.roomId(), HOST);
+        RoomInfo waiting = service.createRoom(HOST, MAP, 4);
+
+        assertThat(service.findRoomByPlayer(HOST).roomId()).isEqualTo(waiting.roomId());
+        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(started.roomId());
+    }
 }

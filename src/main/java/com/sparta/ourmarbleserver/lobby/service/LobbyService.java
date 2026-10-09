@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -65,6 +66,19 @@ public class LobbyService {
     /** 방 한 개 조회. 없으면 ROOM_NOT_FOUND. 클라 폴링용이다. */
     public synchronized RoomInfo getRoom(String roomId) {
         return toInfo(findRoom(roomId));
+    }
+
+    /**
+     * 이 플레이어가 들어 있는 방을 찾는다. 어느 방에도 없으면 NOT_IN_ROOM.
+     * 요청에는 roomId가 실리지 않아서(LEAVE_ROOM, START_GAME) 요청한 사람의 방을 이걸로 찾는다.
+     * 대기 방과 시작한 방에 같이 들어 있으면 대기 방을 돌려준다.
+     */
+    public synchronized RoomInfo findRoomByPlayer(long playerId) {
+        return repository.findAll().stream()
+                .filter(room -> room.hasMember(playerId))
+                .min(Comparator.comparing((Room room) -> room.getStatus() != RoomStatus.WAITING))
+                .map(this::toInfo)
+                .orElseThrow(() -> new GameException(ErrorCode.NOT_IN_ROOM));
     }
 
     // ==== 참가 / 나가기 ====
