@@ -11,6 +11,7 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
@@ -19,7 +20,6 @@ import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
@@ -52,14 +52,13 @@ class GameServiceAcquireTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private final JsonMapper mapper = JsonMapper.builder().build();
     private PropertyService propertyService;
 
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(1, 2)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(1, 2)),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
 
@@ -88,7 +87,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         long price = propertyService.getAcquireValue(property(PROPERTY_ID));
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty(1L, PROPERTY_ID, true);
 
         assertThat(price).isEqualTo(160_000);
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
@@ -101,21 +100,21 @@ class GameServiceAcquireTest {
         GameService service = newService();
         property(PROPERTY_ID).setBuildingLevel(BuildingLevel.VILLA);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty(1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
     }
 
     @Test
-    void 인수하면_PROPERTY_ACQUIRED가_방_전원에게_나가고_턴이_넘어간다() {
+    void 인수하면_PROPERTY_ACQUIRED_알림이_나가고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        GameResult result = service.acquireProperty(1L, PROPERTY_ID, true);
 
-        assertThat(publisher.types()).containsExactly(MessageType.PROPERTY_ACQUIRED);
-        assertThat(publisher.last().playerId()).isNull();
+        assertThat(result.roomId()).isEqualTo(ROOM);
+        assertThat(result.types()).containsExactly(MessageType.PROPERTY_ACQUIRED);
         PropertyAcquiredPayload payload =
-                publisher.payloadsOf(MessageType.PROPERTY_ACQUIRED, PropertyAcquiredPayload.class).get(0);
+                result.payloadsOf(MessageType.PROPERTY_ACQUIRED, PropertyAcquiredPayload.class).get(0);
         assertThat(payload.playerId()).isEqualTo(1L);
         assertThat(payload.propertyId()).isEqualTo(PROPERTY_ID);
         assertThat(payload.isAccept()).isTrue();
@@ -127,11 +126,11 @@ class GameServiceAcquireTest {
     void 거절하면_상태는_그대로이고_isAccept_false로_알리고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, false);
+        GameResult result = service.acquireProperty(1L, PROPERTY_ID, false);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(2L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
-        assertThat(publisher.payloadsOf(MessageType.PROPERTY_ACQUIRED, PropertyAcquiredPayload.class)
+        assertThat(result.payloadsOf(MessageType.PROPERTY_ACQUIRED, PropertyAcquiredPayload.class)
                 .get(0).isAccept()).isFalse();
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
     }
@@ -141,7 +140,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().setDouble(true);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty(1L, PROPERTY_ID, true);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
@@ -152,11 +151,10 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(159_999);
 
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(2L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(159_999);
-        assertThat(publisher.events()).isEmpty();
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ACQUIRE);
     }
 
@@ -165,7 +163,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(160_000);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty(1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
@@ -176,11 +174,10 @@ class GameServiceAcquireTest {
         GameService service = newService();
 
         property(PROPERTY_ID).setOwnerId(1L);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
 
         property(PROPERTY_ID).setOwnerId(null);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
-        assertThat(publisher.events()).isEmpty();
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
     }
 
     @Test
@@ -188,17 +185,17 @@ class GameServiceAcquireTest {
         GameService service = newService();
         property(104).setOwnerId(2L);
 
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.acquireProperty(1L, 104, true), ErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니거나_인수를_고를_phase가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.acquireProperty(ROOM, 2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.acquireProperty(2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.acquireProperty(ROOM, 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
     }
 
     @Test
@@ -209,10 +206,10 @@ class GameServiceAcquireTest {
         long toll = propertyService.getToll(property(PROPERTY_ID));
         long price = propertyService.getAcquireValue(property(PROPERTY_ID));
 
-        service.rollDice(ROOM, 1L);   // 주사위 (1, 2) → 3번 칸 도착, 통행료 정산
+        service.rollDice(1L);   // 주사위 (1, 2) → 3번 칸 도착, 통행료 정산
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ACQUIRE);
 
-        service.acquireProperty(ROOM, 1L, PROPERTY_ID, true);
+        service.acquireProperty(1L, PROPERTY_ID, true);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(1L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll - price);

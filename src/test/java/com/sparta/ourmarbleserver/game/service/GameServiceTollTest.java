@@ -10,13 +10,13 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.PropertyState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
@@ -48,13 +48,12 @@ class GameServiceTollTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private PropertyService propertyService;
 
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(1, 2)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(1, 2)),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
         property().setOwnerId(2L);
@@ -74,7 +73,7 @@ class GameServiceTollTest {
         GameService service = newService();
         long toll = propertyService.getToll(property());
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(toll).isPositive();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll);
@@ -85,9 +84,9 @@ class GameServiceTollTest {
     void 통행료는_알림_없이_서버_내부에서만_처리된다() {
         GameService service = newService();
 
-        service.rollDice(ROOM, 1L);
+        GameResult result = service.rollDice(1L);
 
-        assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);
+        assertThat(result.types()).containsExactly(MessageType.DICE_ROLLED);
     }
 
     @Test
@@ -96,7 +95,7 @@ class GameServiceTollTest {
         property().setBuildingLevel(BuildingLevel.HOTEL);
         long toll = propertyService.getToll(property());
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(toll).isGreaterThan(propertyService.getToll(landLevelCopy()));
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll);
@@ -109,7 +108,7 @@ class GameServiceTollTest {
         long acquire = propertyService.getAcquireValue(property());
         state().getPlayerState(1L).setMoney(toll + acquire);   // 통행료를 내면 인수가와 딱 같다
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ACQUIRE);
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
@@ -122,7 +121,7 @@ class GameServiceTollTest {
         long acquire = propertyService.getAcquireValue(property());
         state().getPlayerState(1L).setMoney(toll + acquire - 1);
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
@@ -135,7 +134,7 @@ class GameServiceTollTest {
         state().getPlayerState(1L).setMoney(toll - 1);
         state().getPropertyState(101).orElseThrow().setOwnerId(1L);   // 매각가가 통행료를 메우고도 남는 땅
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_SELL);
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
@@ -144,11 +143,11 @@ class GameServiceTollTest {
     }
 
     @Test
-    void 전부_팔아도_통행료에_못_미치면_매각을_기다리지_않는다() {
+    void 전부_팔아도_통행료에_못_미치면_파산한다() {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(0);   // 가진 땅도 없다
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).isBankrupt()).isTrue();
     }

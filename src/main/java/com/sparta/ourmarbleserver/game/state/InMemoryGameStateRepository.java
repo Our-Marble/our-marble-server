@@ -18,6 +18,14 @@ public class InMemoryGameStateRepository implements GameStateRepository {
     }
 
     @Override
+    public Optional<GameState> findByPlayerId(long playerId) {
+        return store.values(). stream()
+                .filter(state -> !state.isGameOver())
+                .filter(state -> state.players().stream().anyMatch(player -> player.getPlayerId() == playerId))
+                .findFirst();
+    }
+
+    @Override
     public void save(GameState state) {
         store.put(state.getRoomId(), state);
     }
