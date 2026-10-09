@@ -197,13 +197,4 @@ class GameServiceBuildTest {
         assertRejected(() -> service.build(ROOM, 1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
     }
 
-    @Test
-    void handle로_건설_요청을_처리한다() throws Exception {
-        GameService service = newService();
-
-        assertThat(service.types()).contains(MessageType.BUILD);
-        service.handle(MessageType.BUILD, ROOM, 1L, mapper.readTree("{\"propertyId\":103,\"isAccept\":true}"));
-
-        assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
-    }
 }

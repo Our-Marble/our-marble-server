@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -9,18 +10,20 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 로비 도메인 서비스. HTTP 컨트롤러는 이 클래스의 메서드만 호출한다.
- * playerId는 컨트롤러가 로그인 세션에서 꺼내 넘긴다. (SessionConst.LOGIN_MEMBER_ID)
- * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 컨트롤러가 HTTP 응답으로 바꾼다.
+ * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(MessageHandler)이 이 클래스의 메서드만 호출한다.
+ * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
+ * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 전송 계층이 ERROR로 바꿔 보낸다.
  * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.
  *
- * TODO: 게임이 끝나면 방을 지우는 연결이 아직 없다. (PLAYING 방은 남아 있다)
+ * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 deleteRoom으로 방을 지운다.
+ * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
  */
 @Service
 @RequiredArgsConstructor
@@ -160,6 +163,30 @@ public class LobbyService {
         room.setStatus(RoomStatus.PLAYING);
         repository.save(room);
         return toInfo(room);
+    }
+
+    // ==== 방 삭제 ====
+
+    /**
+     * 방을 지운다. 게임이 끝났을 때 게임 쪽에서 부른다. 시작한 방(PLAYING)도 지운다.
+     * 없는 방이면 ROOM_NOT_FOUND.
+     */
+    public synchronized void deleteRoom(String roomId) {
+        findRoom(roomId);
+        repository.deleteById(roomId);
+    }
+
+    /**
+     * 게임이 끝나면(GameEndedEvent) 방을 지운다. 게임 요청을 처리하는 도중에 불리므로 방이 없어도 예외를 던지지 않는다.
+     */
+    @EventListener
+    public synchronized void onGameEnded(GameEndedEvent event) {
+        try {
+            deleteRoom(event.roomId());
+        } catch (GameException ignored) {
+            // 방이 없으면 지울 것이 없다.
+        }
+
     }
 
     // ==== 도우미 ====

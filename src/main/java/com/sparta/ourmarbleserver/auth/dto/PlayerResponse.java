@@ -5,7 +5,8 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public class MemberResponse {
+public class PlayerResponse {
     private final Long id;
     private final String email;
+    private final String nickname;
 }

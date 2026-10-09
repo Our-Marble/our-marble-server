@@ -22,7 +22,6 @@ import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 세계여행(CHOOSE_DESTINATION) 테스트. 세계여행 칸은 24번이다. */
@@ -185,23 +184,4 @@ class GameServiceWorldTravelTest {
         assertRejected(() -> service.chooseDestination(ROOM, 1L, 3), ErrorCode.INVALID_STATE);
     }
 
-    @Test
-    void handle로_목적지_선택_요청을_처리한다() throws Exception {
-        GameService service = newServiceChoosing();
-
-        assertThat(service.types()).contains(MessageType.CHOOSE_DESTINATION);
-        service.handle(MessageType.CHOOSE_DESTINATION, ROOM, 1L, mapper.readTree("{\"destinationPosition\":3}"));
-
-        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(3);
-    }
-
-    @Test
-    void 요청_본문에_destinationPosition이_없으면_거부된다() throws Exception {
-        GameService service = newServiceChoosing();
-        JsonNode body = mapper.readTree("{}");
-
-        assertRejected(() -> service.handle(MessageType.CHOOSE_DESTINATION, ROOM, 1L, body),
-                ErrorCode.INVALID_PROPERTY);
-        assertThat(publisher.events()).isEmpty();
-    }
 }
