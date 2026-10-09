@@ -10,12 +10,12 @@ import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -47,7 +47,6 @@ class GameServiceTaxAndFundTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
 
     /** 플레이어 1이 startPosition에서 faces 눈으로 굴리는 상태의 서비스 */
     private GameService newService(int startPosition, int... faces) {
@@ -67,7 +66,7 @@ class GameServiceTaxAndFundTest {
     void 세무조사_칸에_도착하면_세금이_걷혀_적립금에_쌓이고_턴이_넘어간다() {
         GameService service = newService(27, 1, 2);   // 27 + 3 = 30
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(DONATION_TILE);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - EconomyService.TAX_AMOUNT);
@@ -80,9 +79,9 @@ class GameServiceTaxAndFundTest {
     void 세금은_알림_없이_서버_내부에서만_처리된다() {
         GameService service = newService(27, 1, 2);
 
-        service.rollDice( 1L);
+        GameResult result = service.rollDice(1L);
 
-        assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED);
+        assertThat(result.types()).containsExactly(MessageType.DICE_ROLLED);
     }
 
     @Test
@@ -90,7 +89,7 @@ class GameServiceTaxAndFundTest {
         GameService service = newService(27, 1, 2);
         state().getPlayerState(1L).setMoney(30_000);
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
         assertThat(state().getWelfareFund()).isEqualTo(30_000);
@@ -102,7 +101,7 @@ class GameServiceTaxAndFundTest {
     void 더블로_세무조사_칸에_도착해도_세금을_내고_같은_플레이어가_다시_굴린다() {
         GameService service = newService(28, 1, 1);   // 28 + 2 = 30, 더블
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getWelfareFund()).isEqualTo(EconomyService.TAX_AMOUNT);
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
@@ -114,7 +113,7 @@ class GameServiceTaxAndFundTest {
         GameService service = newService(13, 1, 2);   // 13 + 3 = 16
         state().setWelfareFund(250_000);
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(CHARITY_TILE);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY + 250_000);
@@ -126,7 +125,7 @@ class GameServiceTaxAndFundTest {
     void 적립금이_없으면_아무것도_받지_않고_턴이_넘어간다() {
         GameService service = newService(13, 1, 2);
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
         assertThat(state().getWelfareFund()).isZero();
@@ -137,7 +136,7 @@ class GameServiceTaxAndFundTest {
     void 출발_칸에_도착하면_월급만_받고_턴이_넘어간다() {
         GameService service = newService(29, 1, 2);   // 29 + 3 = 32 → 0번 칸
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isZero();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT);
