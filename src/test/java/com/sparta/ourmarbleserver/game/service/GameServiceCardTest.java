@@ -73,7 +73,7 @@ class GameServiceCardTest {
 
     /** 플레이어 1이 황금열쇠 칸에서 카드 뽑기를 기다리는 상태. randoms는 FixedRandom에 들어갈 값이다. */
     private GameService newService(int... randoms) {
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(randoms)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(randoms)),
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
         state().getPlayerState(1L).setPosition(KEY_TILE);

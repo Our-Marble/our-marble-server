@@ -8,7 +8,6 @@ import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.EventPublisher;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
@@ -23,7 +22,8 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 
 /**
- * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 알림을 보낸다.
+ * 게임 진행의 중심. 요청을 검증하고, 주사위·이동·턴 서비스를 순서대로 부르고, 상태를 저장하고, 보낼 알림을 GameResult로 돌려준다.
+ * 알림을 실제로 보내는 일은 요청을 부른 쪽(MessageRouter)이 한다. (서비스는 웹소켓과 전송 방식을 모른다)
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
  * 요청 type 분류와 요청 본문 읽기는 하지 않는다. MessageRouter가 type별로 아래 함수를 직접 호출한다.
  * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
@@ -37,7 +37,6 @@ public class GameService {
     /** 초기 자금 */
     public static final long START_MONEY = 500_000;
     private final GameStateRepository repository;
-    private final EventPublisher publisher;
     private final DiceService diceService;
     private final MoveService moveService;
     private final TurnService turnService;
@@ -99,19 +98,19 @@ public class GameService {
      * 알림은 DICE_ROLLED 하나만 나간다. 이동과 월급은 클라가 같은 규칙으로 계산한다.
      * 무인도 영업정지 중이면 더블이 아닐 때 이동 없이 턴이 넘어가고, 3연속 더블이면 무인도로 간다.
      */
-    public synchronized void rollDice(long playerId) {
+    public synchronized GameResult rollDice(long playerId) {
         GameState state = validate(playerId, TurnPhase.AWAITING_ROLL);
         PlayerState player = state.getPlayerState(playerId);
 
         DiceService.DiceResult dice = diceService.roll(state);
-        publish(state.getRoomId(), MessageType.DICE_ROLLED,
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.DICE_ROLLED,
                 new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
         // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
         if (turnService.failIslandEscape(player, state.isDouble())) {
             turnService.passTurn(state);
             save(state);
-            return;
+            return result;
         }
         turnService.escapeIslandByDouble(state, player);
 
@@ -123,7 +122,7 @@ public class GameService {
             moveService.moveDirectly(player, island.getAsInt());
             processArrival(state, player);
             save(state);
-            return;
+            return result;
         }
 
         MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
@@ -133,6 +132,7 @@ public class GameService {
         processArrival(state, player);
 
         save(state);
+        return result;
     }
 
     // ===== 땅 구매 / 거절 =====
@@ -142,7 +142,7 @@ public class GameService {
      * 구매: 빈 땅 → 현금 확인 → 땅값 차감 → 주인 등록. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
 
-    public synchronized void purchaseProperty(long playerId, int propertyId, boolean isAccept) {
+    public synchronized GameResult purchaseProperty(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_PURCHASE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -161,11 +161,12 @@ public class GameService {
             property.setOwnerId(playerId);
         }
 
-        publish(state.getRoomId(), MessageType.PROPERTY_PURCHASED,
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_PURCHASED,
                 new PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
+        return result;
     }
 
     // ===== 땅 매각 =====
@@ -175,7 +176,7 @@ public class GameService {
      * 검증 순서: 목록이 비었거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
      * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
      */
-    public synchronized void sellProperties(long playerId, List<Integer> propertyIds) {
+    public synchronized GameResult sellProperties(long playerId, List<Integer> propertyIds) {
         GameState state = validate(playerId, TurnPhase.AWAITING_SELL);
         PlayerState payer = state.getPlayerState(playerId);
 
@@ -205,11 +206,12 @@ public class GameService {
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
 
 
-        publish(state.getRoomId(), MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTIES_SOLD,
+                new PropertiesSoldPayload(playerId, propertyIds));
         turnService.endTurn(state);
 
         save(state);
-
+        return result;
     }
 
     /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
@@ -233,7 +235,7 @@ public class GameService {
      * 건설 검증: 내 땅(NOT_OWNER) → 건설 가능 땅(CANNOT_BUILD) → 호텔 아님(MAX_LEVEL) → 현금 ≥ 건설비(NOT_ENOUGH_MONEY).
      * 건물은 한 단계씩 올라가고 건설비는 올라갈 단계의 비용이다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public synchronized void build(long playerId, int propertyId, boolean isAccept) {
+    public synchronized GameResult build(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_BUILD, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -259,10 +261,12 @@ public class GameService {
             property.setBuildingLevel(nextLevel);
         }
 
-        publish(state.getRoomId(), MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.BUILT,
+                new BuiltPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
+        return result;
     }
 
     // ===== 인수 / 거절 =====
@@ -272,7 +276,7 @@ public class GameService {
      * 인수 검증: 남의 땅(CANNOT_ACQUIRE) → 현금 ≥ 인수가(NOT_ENOUGH_MONEY). 인수가는 이전 주인에게 이체하고
      * 건물 단계는 그대로 둔 채 주인만 바꾼다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public synchronized void acquireProperty(long playerId, int propertyId, boolean isAccept) {
+    public synchronized GameResult acquireProperty(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_ACQUIRE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
         requireStandingOn(player, propertyId);
@@ -291,11 +295,12 @@ public class GameService {
             property.setOwnerId(playerId);
         }
 
-        publish(state.getRoomId(), MessageType.PROPERTY_ACQUIRED,
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_ACQUIRED,
                 new PropertyAcquiredPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
+        return result;
     }
 
     // ===== 세계여행 =====
@@ -304,7 +309,7 @@ public class GameService {
      * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
      * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
      */
-    public synchronized void chooseDestination(long playerId, int destinationPosition) {
+    public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
         GameState state = validate( playerId, TurnPhase.AWAITING_DESTINATION);
         PlayerState player = state.getPlayerState(playerId);
 
@@ -312,13 +317,14 @@ public class GameService {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
 
-        publish(state.getRoomId(), MessageType.DESTINATION_CHOSEN,
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN,
                 new DestinationChosenPayload(playerId, destinationPosition));
 
         moveService.moveDirectly(player, destinationPosition);
         processArrival(state, player);
 
         save(state);
+        return result;
     }
 
     // ===== 황금열쇠 =====
@@ -327,7 +333,7 @@ public class GameService {
      * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
      * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
      */
-    public synchronized void drawCard(long playerId)
+    public synchronized GameResult drawCard(long playerId)
     {
         GameState state = validate(playerId, TurnPhase.AWAITING_DRAW_CARD);
         PlayerState player = state.getPlayerState(playerId);
@@ -336,15 +342,18 @@ public class GameService {
         if (cards.isEmpty()) {
             turnService.endTurn(state); // 카드가 없으면 턴이 멈추지 않도록 종료한다.
             save(state);
-            return;
+            return GameResult.none(state.getRoomId());
         }
         CardData card = cards.get(diceService.randomIndex(cards.size()));
-        publish(state.getRoomId(), MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.CARD_DRAWN,
+                new CardDrawnPayload(playerId, card.id()));
 
         applyCardEffect(state, player, card);
 
         save(state);
+        return result;
     }
+
     /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
     private void applyCardEffect(GameState state, PlayerState player, CardData card) {
         switch (card.effectType()) {
@@ -560,14 +569,5 @@ public class GameService {
     }
     private TileData tileAt(int position) {
         return gameDataService.getTiles().get(position);
-    }
-
-    /**
-     * 방 전원에게 알림을 보낸다.
-     * TODO(네트워크): 실제 EventPublisher가 확정되기 전까지 알림이 나가지 않도록 호출을 주석 처리했다.
-     * 확정되면 아래 줄의 주석을 풀고, EventPublisher 모양이 바뀌었으면 여기만 고친다.
-     */
-    private void publish(String roomId, MessageType type, Object payload) {
-        //publisher.publishToRoom(roomId,type, payload);
     }
 }

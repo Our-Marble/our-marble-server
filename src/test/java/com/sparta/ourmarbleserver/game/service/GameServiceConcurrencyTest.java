@@ -38,7 +38,7 @@ class GameServiceConcurrencyTest {
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new FakeEventPublisher(), new DiceService(),
+        GameService service = new GameService(repository, new DiceService(),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
 

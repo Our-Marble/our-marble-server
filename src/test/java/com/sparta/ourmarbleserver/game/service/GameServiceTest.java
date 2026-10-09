@@ -50,7 +50,7 @@ class GameServiceTest {
     /** 플레이어 1, 2로 게임을 시작한 서비스. 주사위 눈은 faces 순서대로 나온다. */
     private GameService newService(int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(faces)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
         return service;

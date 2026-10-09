@@ -59,7 +59,7 @@ class GameServiceAcquireTest {
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(1, 2)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(1, 2)),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
 

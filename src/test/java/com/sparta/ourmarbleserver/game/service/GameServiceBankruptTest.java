@@ -58,7 +58,7 @@ class GameServiceBankruptTest {
     private GameService newService(int playerCount, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(faces)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, LongStream.rangeClosed(1, playerCount).boxed().toList());
 

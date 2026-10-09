@@ -51,7 +51,7 @@ class GameServiceIslandTest {
     /** 플레이어 1이 startPosition에서 faces 눈으로 굴리는 상태의 서비스 */
     private GameService newService(int startPosition, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(faces)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
         state().getPlayerState(1L).setPosition(startPosition);

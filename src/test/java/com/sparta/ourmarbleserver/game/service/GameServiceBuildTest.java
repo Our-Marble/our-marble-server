@@ -38,7 +38,7 @@ class GameServiceBuildTest {
 
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
-        GameService service = new GameService(repository, publisher, new DiceService(),
+        GameService service = new GameService(repository, new DiceService(),
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
 
