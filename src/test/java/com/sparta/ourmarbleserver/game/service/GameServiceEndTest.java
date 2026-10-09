@@ -19,7 +19,6 @@ import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.PropertyState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
@@ -51,7 +50,6 @@ class GameServiceEndTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private final List<Object> ended = new ArrayList<>();
 
     private GameService newService(int playerCount, int... faces) {
