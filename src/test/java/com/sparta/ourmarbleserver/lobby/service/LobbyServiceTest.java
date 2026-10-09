@@ -4,10 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
+import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.GameState;
@@ -34,6 +40,8 @@ class LobbyServiceTest {
         int callCount;
         String roomId;
         List<Long> playerIds;
+        Map<Long, String> nicknames;
+        Set<Long> botIds;
         boolean fail;
 
         RecordingGameService() {
@@ -42,19 +50,34 @@ class LobbyServiceTest {
         }
 
         @Override
-        public GameState startGame(String roomId, List<Long> playerIds) {
+        public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
             if (fail) {
                 throw new IllegalStateException("시작 실패");
             }
             this.callCount++;
             this.roomId = roomId;
             this.playerIds = new ArrayList<>(playerIds);
+            this.nicknames = new HashMap<>(nicknames);
+            this.botIds = new HashSet<>(botIds);
             return null;
         }
     }
 
+    /** DB 없이 닉네임을 돌려주는 PlayerService. 1번 플레이어는 "닉1"이다. */
+    private static class FakePlayerService extends PlayerService {
+        FakePlayerService() {
+            super(null, null);
+        }
+
+        @Override
+        public PlayerResponse findMe(long userId) {
+            return new PlayerResponse(userId, "", "닉" + userId);
+        }
+    }
+
     private final RecordingGameService gameService = new RecordingGameService();
-    private final LobbyService service = new LobbyService(new InMemoryRoomRepository(), gameService);
+    private final LobbyService service =
+            new LobbyService(new InMemoryRoomRepository(), gameService, new FakePlayerService());
 
     private static void assertError(ErrorCode code, Runnable action) {
         assertThatThrownBy(action::run)
@@ -359,6 +382,20 @@ class LobbyServiceTest {
         assertThat(service.createRoom(HOST, MAP, 4).roomId()).isNotEqualTo(room.roomId());
     }
 
+    // ===== 게임 시작 시 닉네임 =====
+
+    @Test
+    void 게임을_시작하면_참가자_닉네임을_넘긴다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.nicknames).hasSize(2)
+                .containsEntry(HOST, "닉1")
+                .containsEntry(P2, "닉2");
+        assertThat(gameService.botIds).isEmpty();
+    }
 
     // ===== 플레이어로 방 찾기 =====
 

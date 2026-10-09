@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
+import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
@@ -13,8 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -35,6 +35,7 @@ public class LobbyService {
     private final RoomRepository repository;
     private final GameService gameService;
     private final AtomicLong roomSequence = new AtomicLong();
+    private final PlayerService playerService;
 
     // ==== 방 만들기 / 조회 ====
 
@@ -173,7 +174,15 @@ public class LobbyService {
             throw new GameException(ErrorCode.NOT_ALL_READY);
         }
 
-        gameService.startGame(roomId, room.memberIds());
+        Map<Long, String> nickNameMap = new HashMap<>();
+        for (long memberId : room.memberIds()) {
+            String nickname = playerService.findMe(memberId).getNickname();
+            nickNameMap.put(memberId, nickname == null ? "" : nickname);
+        }
+
+        Set<Long> botIds = new HashSet<>();
+
+        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds);
         room.setStatus(RoomStatus.PLAYING);
         repository.save(room);
         return toInfo(room);
