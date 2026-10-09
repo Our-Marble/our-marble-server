@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.CardData;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
@@ -20,7 +21,6 @@ import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -53,7 +53,6 @@ class GameServiceCardTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private final GameDataService data = new GameDataService(JsonMapper.builder().build());
 
     /** 카드 id의 목록 위치 + 1. FixedRandom에 넣으면 그 카드가 뽑힌다. */
@@ -73,7 +72,7 @@ class GameServiceCardTest {
 
     /** 플레이어 1이 황금열쇠 칸에서 카드 뽑기를 기다리는 상태. randoms는 FixedRandom에 들어갈 값이다. */
     private GameService newService(int... randoms) {
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(randoms)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(randoms)),
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
         service.startGame(ROOM, List.of(1L, 2L));
         state().getPlayerState(1L).setPosition(KEY_TILE);
@@ -86,14 +85,14 @@ class GameServiceCardTest {
     }
 
     @Test
-    void 카드를_뽑으면_CARD_DRAWN이_방_전원에게_나간다() {
+    void 카드를_뽑으면_CARD_DRAWN_알림이_나간다() {
         GameService service = newService(faceOf(1));
 
-        service.drawCard(ROOM, 1L);
+        GameResult result = service.drawCard(1L);
 
-        assertThat(publisher.types()).containsExactly(MessageType.CARD_DRAWN);
-        assertThat(publisher.last().playerId()).isNull();
-        CardDrawnPayload payload = publisher.payloadsOf(MessageType.CARD_DRAWN, CardDrawnPayload.class).get(0);
+        assertThat(result.roomId()).isEqualTo(ROOM);
+        assertThat(result.types()).containsExactly(MessageType.CARD_DRAWN);
+        CardDrawnPayload payload = result.payloadsOf(MessageType.CARD_DRAWN, CardDrawnPayload.class).get(0);
         assertThat(payload.playerId()).isEqualTo(1L);
         assertThat(payload.cardId()).isEqualTo(1);
     }
@@ -102,7 +101,7 @@ class GameServiceCardTest {
     void 돈_받기_카드는_현금을_받고_턴이_넘어간다() {
         GameService service = newService(faceOf(1));
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY + card(1).amount());
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
@@ -113,7 +112,7 @@ class GameServiceCardTest {
     void 패널티_카드는_현금을_내고_턴이_넘어간다() {
         GameService service = newService(faceOf(2));
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - card(2).amount());
         assertThat(state().getWelfareFund()).isZero();   // 이 카드는 은행으로 간다 (penaltyToFestivalPool=false)
@@ -125,7 +124,7 @@ class GameServiceCardTest {
         GameService service = newService(faceOf(2));
         state().getPlayerState(1L).setMoney(card(2).amount() - 1);
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
         assertThat(state().getPlayerState(1L).isBankrupt()).isFalse();
@@ -138,7 +137,7 @@ class GameServiceCardTest {
         int target = card(3).targetTileId();
         boolean salary = target < KEY_TILE;
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(target);
         assertThat(state().getPlayerState(1L).getMoney())
@@ -151,7 +150,7 @@ class GameServiceCardTest {
         GameService service = newService(faceOf(4));   // 3칸 뒤로
         int expected = ((KEY_TILE + card(4).steps()) % 32 + 32) % 32;   // 2 - 3 = 31번 칸 (땅 131, 빈 땅)
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(card(4).steps()).isNegative();
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(expected);
@@ -164,7 +163,7 @@ class GameServiceCardTest {
     void 무인도_카드는_월급_없이_무인도로_가서_영업정지가_시작되고_턴이_넘어간다() {
         GameService service = newService(faceOf(0));
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(ISLAND_TILE);
         assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
@@ -177,7 +176,7 @@ class GameServiceCardTest {
         GameService service = newService(faceOf(0));
         state().setDouble(true);
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
         assertThat(state().isDouble()).isFalse();
@@ -188,7 +187,7 @@ class GameServiceCardTest {
         GameService service = newService(faceOf(1));
         state().setDouble(true);
 
-        service.drawCard(ROOM, 1L);
+        service.drawCard(1L);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
@@ -201,28 +200,27 @@ class GameServiceCardTest {
         state().getPlayerState(1L).setIslandTurnsRemaining(0);
         state().setPhase(TurnPhase.AWAITING_ROLL);
 
-        service.rollDice(ROOM, 1L);
+        GameResult rolled = service.rollDice(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DRAW_CARD);
 
-        service.drawCard(ROOM, 1L);
+        GameResult drawn = service.drawCard(1L);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY + card(1).amount());
-        assertThat(publisher.types()).containsExactly(MessageType.DICE_ROLLED, MessageType.CARD_DRAWN);
+        assertThat(rolled.types()).containsExactly(MessageType.DICE_ROLLED);
+        assertThat(drawn.types()).containsExactly(MessageType.CARD_DRAWN);
     }
 
     @Test
     void 내_차례가_아니거나_카드를_뽑을_phase가_아니면_거부된다() {
         GameService service = newService(faceOf(1));
 
-        assertThatThrownBy(() -> service.drawCard(ROOM, 2L))
+        assertThatThrownBy(() -> service.drawCard(2L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertThatThrownBy(() -> service.drawCard(ROOM, 1L))
+        assertThatThrownBy(() -> service.drawCard(1L))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
-        assertThat(publisher.events()).isEmpty();
     }
-
 }

@@ -23,7 +23,6 @@ public class DiceService {
 
     private final Random random;
 
-    @Autowired
     public DiceService() {
         this(new Random());
     }

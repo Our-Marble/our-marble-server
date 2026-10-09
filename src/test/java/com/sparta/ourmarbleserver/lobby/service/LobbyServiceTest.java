@@ -37,7 +37,7 @@ class LobbyServiceTest {
         boolean fail;
 
         RecordingGameService() {
-            super(null, null, null, null, null, null, null,
+            super( null, null, null, null, null, null,
                     new GameDataService(JsonMapper.builder().build()));
         }
 

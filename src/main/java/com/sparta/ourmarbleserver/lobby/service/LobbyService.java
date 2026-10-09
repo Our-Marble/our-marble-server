@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(MessageHandler)이 이 클래스의 메서드만 호출한다.
+ * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(LobbyMessageHandler)이 이 클래스의 메서드만 호출한다.
  * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
  * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 전송 계층이 ERROR로 바꿔 보낸다.
  * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.

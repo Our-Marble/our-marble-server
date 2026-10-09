@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
@@ -16,7 +17,6 @@ import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
@@ -33,14 +33,13 @@ class GameServiceSellTest {
     private static final String ROOM = "r1";
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private final JsonMapper mapper = JsonMapper.builder().build();
     private PropertyService propertyService;
 
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(),
+        GameService service = new GameService(repository, new DiceService(),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
 
@@ -77,7 +76,7 @@ class GameServiceSellTest {
         long toll = toll();
         long proceeds = propertyService.getSellValue(property(101));
 
-        service.sellProperties(ROOM, 1L, List.of(101));
+        service.sellProperties(1L, List.of(101));
 
         assertThat(property(101).hasOwner()).isFalse();
         assertThat(property(101).getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
@@ -86,15 +85,15 @@ class GameServiceSellTest {
     }
 
     @Test
-    void 매각하면_PROPERTIES_SOLD가_방_전원에게_나가고_턴이_넘어간다() {
+    void 매각하면_PROPERTIES_SOLD_알림이_나가고_턴이_넘어간다() {
         GameService service = newService();
 
-        service.sellProperties(ROOM, 1L, List.of(101));
+        GameResult result = service.sellProperties(1L, List.of(101));
 
-        assertThat(publisher.types()).containsExactly(MessageType.PROPERTIES_SOLD);
-        assertThat(publisher.last().playerId()).isNull();
+        assertThat(result.roomId()).isEqualTo(ROOM);
+        assertThat(result.types()).containsExactly(MessageType.PROPERTIES_SOLD);
         PropertiesSoldPayload payload =
-                publisher.payloadsOf(MessageType.PROPERTIES_SOLD, PropertiesSoldPayload.class).get(0);
+                result.payloadsOf(MessageType.PROPERTIES_SOLD, PropertiesSoldPayload.class).get(0);
         assertThat(payload.playerId()).isEqualTo(1L);
         assertThat(payload.propertyIds()).containsExactly(101);
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
@@ -107,7 +106,7 @@ class GameServiceSellTest {
         property(101).setBuildingLevel(BuildingLevel.HOTEL);   // 투자금 350,000 → 매각가 175,000
         long proceeds = propertyService.getSellValue(property(101));
 
-        service.sellProperties(ROOM, 1L, List.of(101));
+        service.sellProperties(1L, List.of(101));
 
         assertThat(proceeds).isEqualTo(175_000);
         assertThat(property(101).getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
@@ -119,7 +118,7 @@ class GameServiceSellTest {
         GameService service = newService();
         long proceeds = propertyService.getSellValue(property(101)) + propertyService.getSellValue(property(105));
 
-        service.sellProperties(ROOM, 1L, List.of(101, 105));
+        service.sellProperties(1L, List.of(101, 105));
 
         assertThat(property(101).hasOwner()).isFalse();
         assertThat(property(105).hasOwner()).isFalse();
@@ -132,9 +131,8 @@ class GameServiceSellTest {
         property(103).setBuildingLevel(BuildingLevel.HOTEL);   // 통행료 180,000
         state().getPlayerState(1L).setMoney(0);
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of(101)), ErrorCode.NOT_ENOUGH_SELL);
+        assertRejected(() -> service.sellProperties(1L, List.of(101)), ErrorCode.NOT_ENOUGH_SELL);
 
-        assertThat(publisher.events()).isEmpty();
         assertThat(property(101).isOwnedBy(1L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isZero();
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_SELL);
@@ -145,14 +143,14 @@ class GameServiceSellTest {
     void 목록이_비었으면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of()), ErrorCode.INVALID_PROPERTY_LIST);
+        assertRejected(() -> service.sellProperties(1L, List.of()), ErrorCode.INVALID_PROPERTY_LIST);
     }
 
     @Test
     void 땅_번호가_중복되면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of(101, 101)), ErrorCode.INVALID_PROPERTY_LIST);
+        assertRejected(() -> service.sellProperties(1L, List.of(101, 101)), ErrorCode.INVALID_PROPERTY_LIST);
         assertThat(property(101).isOwnedBy(1L)).isTrue();
     }
 
@@ -160,17 +158,16 @@ class GameServiceSellTest {
     void 없는_땅_번호면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of(999)), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.sellProperties(1L, List.of(999)), ErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_땅이_아니면_거부되고_상태가_바뀌지_않는다() {
         GameService service = newService();
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of(101, 103)), ErrorCode.NOT_OWNER);
+        assertRejected(() -> service.sellProperties(1L, List.of(101, 103)), ErrorCode.NOT_OWNER);
 
         assertThat(property(101).isOwnedBy(1L)).isTrue();
-        assertThat(publisher.events()).isEmpty();
     }
 
     @Test
@@ -178,14 +175,13 @@ class GameServiceSellTest {
         GameService service = newService();
         state().setPhase(TurnPhase.AWAITING_ROLL);
 
-        assertRejected(() -> service.sellProperties(ROOM, 1L, List.of(101)), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.sellProperties(1L, List.of(101)), ErrorCode.INVALID_STATE);
     }
 
     @Test
     void 내_차례가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.sellProperties(ROOM, 2L, List.of(101)), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.sellProperties(2L, List.of(101)), ErrorCode.NOT_YOUR_TURN);
     }
-
 }

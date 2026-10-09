@@ -15,4 +15,7 @@ public interface GameStateRepository {
     void save(GameState state);
 
     void deleteById(String roomId);
+
+    /** 플레이어가 속한 진행 중인(끝나지 않은) 게임 상태를 찾는다. */
+    Optional<GameState> findByPlayerId(long playerId);
 }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.DestinationChosenPayload;
+import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
@@ -19,7 +20,6 @@ import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.global.transport.FakeEventPublisher;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 
 import tools.jackson.databind.json.JsonMapper;
@@ -47,14 +47,13 @@ class GameServiceWorldTravelTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final FakeEventPublisher publisher = new FakeEventPublisher();
     private final JsonMapper mapper = JsonMapper.builder().build();
     private PropertyService propertyService;
 
     private GameService newService(int... faces) {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, publisher, new DiceService(new FixedRandom(faces)),
+        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
                 new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
         service.startGame(ROOM, List.of(1L, 2L));
         return service;
@@ -82,7 +81,7 @@ class GameServiceWorldTravelTest {
         GameService service = newService(1, 2);
         state().getPlayerState(1L).setPosition(21);   // 21 + 3 = 24
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
@@ -94,7 +93,7 @@ class GameServiceWorldTravelTest {
         GameService service = newService(1, 1);
         state().getPlayerState(1L).setPosition(22);   // 22 + 2 = 24, 더블
 
-        service.rollDice(ROOM, 1L);
+        service.rollDice(1L);
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
         assertThat(state().isDouble()).isFalse();
@@ -105,9 +104,9 @@ class GameServiceWorldTravelTest {
         GameService service = newService(1, 2, 1, 2);
         state().getPlayerState(1L).setPosition(21);
 
-        service.rollDice(ROOM, 1L);               // 플레이어 1: 세계여행 칸에 도착, 턴 넘어감
-        service.rollDice(ROOM, 2L);               // 플레이어 2: 3번 칸(땅 103, 빈 땅)에 도착
-        service.purchaseProperty(ROOM, 2L, 103, false);   // 거절하고 턴 종료
+        service.rollDice(1L);                       // 플레이어 1: 세계여행 칸에 도착, 턴 넘어감
+        service.rollDice(2L);                       // 플레이어 2: 3번 칸(땅 103, 빈 땅)에 도착
+        service.purchaseProperty(2L, 103, false);   // 거절하고 턴 종료
 
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
@@ -117,7 +116,7 @@ class GameServiceWorldTravelTest {
     void 목적지를_고르면_월급_없이_이동하고_도착_칸을_처리한다() {
         GameService service = newServiceChoosing();
 
-        service.chooseDestination(ROOM, 1L, 3);   // 3번 칸 (땅 103, 빈 땅)
+        service.chooseDestination(1L, 3);   // 3번 칸 (땅 103, 빈 땅)
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(3);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
@@ -129,22 +128,22 @@ class GameServiceWorldTravelTest {
     void 출발_지점을_지나는_방향의_목적지여도_월급은_없다() {
         GameService service = newServiceChoosing();
 
-        service.chooseDestination(ROOM, 1L, 1);   // 24 → 1은 출발 지점을 지나는 방향
+        service.chooseDestination(1L, 1);   // 24 → 1은 출발 지점을 지나는 방향
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(1);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
     }
 
     @Test
-    void 목적지_선택은_DESTINATION_CHOSEN을_방_전원에게_보낸다() {
+    void 목적지_선택은_DESTINATION_CHOSEN_알림을_보낸다() {
         GameService service = newServiceChoosing();
 
-        service.chooseDestination(ROOM, 1L, 3);
+        GameResult result = service.chooseDestination(1L, 3);
 
-        assertThat(publisher.types()).containsExactly(MessageType.DESTINATION_CHOSEN);
-        assertThat(publisher.last().playerId()).isNull();
+        assertThat(result.roomId()).isEqualTo(ROOM);
+        assertThat(result.types()).containsExactly(MessageType.DESTINATION_CHOSEN);
         DestinationChosenPayload payload =
-                publisher.payloadsOf(MessageType.DESTINATION_CHOSEN, DestinationChosenPayload.class).get(0);
+                result.payloadsOf(MessageType.DESTINATION_CHOSEN, DestinationChosenPayload.class).get(0);
         assertThat(payload.playerId()).isEqualTo(1L);
         assertThat(payload.destinationPosition()).isEqualTo(3);
     }
@@ -155,7 +154,7 @@ class GameServiceWorldTravelTest {
         state().getPropertyState(103).orElseThrow().setOwnerId(2L);
         long toll = propertyService.getToll(state().getPropertyState(103).orElseThrow());
 
-        service.chooseDestination(ROOM, 1L, 3);
+        service.chooseDestination(1L, 3);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll);
         assertThat(state().getPlayerState(2L).getMoney()).isEqualTo(GameService.START_MONEY + toll);
@@ -166,22 +165,20 @@ class GameServiceWorldTravelTest {
     void 보드_밖의_목적지는_거부되고_상태가_바뀌지_않는다() {
         GameService service = newServiceChoosing();
 
-        assertRejected(() -> service.chooseDestination(ROOM, 1L, -1), ErrorCode.INVALID_PROPERTY);
-        assertRejected(() -> service.chooseDestination(ROOM, 1L, 32), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.chooseDestination(1L, -1), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.chooseDestination(1L, 32), ErrorCode.INVALID_PROPERTY);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
-        assertThat(publisher.events()).isEmpty();
     }
 
     @Test
     void 내_차례가_아니거나_목적지를_고를_phase가_아니면_거부된다() {
         GameService service = newServiceChoosing();
 
-        assertRejected(() -> service.chooseDestination(ROOM, 2L, 3), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.chooseDestination(2L, 3), ErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.chooseDestination(ROOM, 1L, 3), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.chooseDestination(1L, 3), ErrorCode.INVALID_STATE);
     }
-
 }
