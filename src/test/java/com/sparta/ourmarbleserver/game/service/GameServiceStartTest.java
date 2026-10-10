@@ -88,4 +88,51 @@ class GameServiceStartTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(repository.findById(ROOM)).isEmpty();
     }
+
+    @Test
+    void 플레이어가_한_명이거나_다섯_명이면_거부된다() {
+        GameService service = newService();
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 2L, 3L, 4L, 5L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(repository.findById(ROOM)).isEmpty();
+    }
+
+    @Test
+    void 두_명에서_네_명까지는_시작할_수_있다() {
+        GameService service = newService();
+
+        service.startGame("r1", List.of(1L, 2L));
+        service.startGame("r2", List.of(3L, 4L, 5L));
+        service.startGame("r3", List.of(6L, 7L, 8L, 9L));
+
+        assertThat(repository.findById("r1")).isPresent();
+        assertThat(repository.findById("r2")).isPresent();
+        assertThat(repository.findById("r3")).isPresent();
+    }
+
+    @Test
+    void 진행_중인_게임이_있는_방_번호로_다시_시작하면_거부되고_기존_게임은_그대로다() {
+        GameService service = newService();
+        GameState first = service.startGame(ROOM, List.of(1L, 2L));
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(3L, 4L)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(repository.findById(ROOM).orElseThrow()).isSameAs(first);
+    }
+
+    @Test
+    void 끝난_게임의_방_번호는_다시_쓸_수_있다() {
+        GameService service = newService();
+        GameState first = service.startGame(ROOM, List.of(1L, 2L));
+        first.setGameOver(true);
+
+        GameState second = service.startGame(ROOM, List.of(3L, 4L));
+
+        assertThat(second).isNotSameAs(first);
+        assertThat(repository.findById(ROOM).orElseThrow()).isSameAs(second);
+    }
 }

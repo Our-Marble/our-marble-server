@@ -19,6 +19,10 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
     public static final int DEFAULT_MAX_ROUND = 30;
     public static final int DEFAULT_ISLAND_TURNS = 3;
 
+    /** 한 게임에 참가할 수 있는 플레이어 수의 한계. 방장이 바꾸는 설정이 아니라 서버 규칙의 한계다. */
+    public static final int MIN_PLAYERS = 2;
+    public static final int MAX_PLAYERS = 4;
+
     /** 값이 범위를 벗어나면 만들 수 없다. (잘못된 설정으로 게임이 시작되는 일을 막는다) */
     public GameConfig {
         if (startMoney < 0) {

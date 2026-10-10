@@ -75,16 +75,27 @@ public class GameService {
      * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
      * config의 초기 자금, 월급, 세금, 최대 라운드, 무인도 영업정지 턴으로 진행한다. (방장이 정한 설정)
      * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
-     * 플레이어 목록이 비었거나 중복이면 IllegalArgumentException.
+     * 플레이어 목록이 비었거나 중복이거나 2~4명이 아니면 IllegalArgumentException,
+     * 같은 방 번호로 진행 중인 게임이 이미 있으면 IllegalStateException.
      * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
      */
-    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds, GameConfig config) {
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames,
+                               Set<Long> botIds, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
+        if (playerIds.size() < GameConfig.MIN_PLAYERS || playerIds.size() > GameConfig.MAX_PLAYERS) {
+            throw new IllegalArgumentException("플레이어는 " + GameConfig.MIN_PLAYERS + "~"
+                    + GameConfig.MAX_PLAYERS + "명이어야 합니다: " + playerIds.size());
+        }
+        boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
+        if (running) {
+            throw new IllegalStateException("이미 진행 중인 게임이 있는 방입니다: " + roomId);
+        }
+
         GameState state = new GameState(roomId);
         state.setConfig(Objects.requireNonNull(config));
-        for(long id : playerIds) {
+        for (long id : playerIds) {
             PlayerState player = new PlayerState(id);
             player.setMoney(config.startMoney());
             player.setNickname(nicknames.getOrDefault(id, ""));
