@@ -1,8 +1,5 @@
 package com.sparta.ourmarbleserver.game.state;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -19,9 +16,6 @@ public class PlayerState {
 
     /** 무인도 탈출까지 남은 턴 수. */
     private int islandTurnsRemaining;
-
-    /** 황금열쇠에서 얻은 사용 카드. */
-    private final List<Integer> cardIds = new ArrayList<>();
 
     private boolean bankrupt;
 

@@ -35,7 +35,7 @@ import java.util.*;
 public class GameService {
 
     /** 초기 자금 */
-    public static final long START_MONEY = 500_000;
+    public static final long START_MONEY = GameConfig.DEFAULT_START_MONEY;
     private final GameStateRepository repository;
     private final DiceService diceService;
     private final MoveService moveService;
@@ -65,18 +65,45 @@ public class GameService {
 
     /**
      * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
-     * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
-     * 플레이어 목록이 비었거나 중복이면 IllegalArgumentException.
-     * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
+     * 기본 설정(GameConfig.defaults())으로 시작한다.
      */
     public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
+        return startGame(roomId, playerIds, nicknames, botIds, GameConfig.defaults());
+    }
+
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
+     * config의 초기 자금, 월급, 세금, 최대 라운드, 무인도 영업정지 턴으로 진행한다. (방장이 정한 설정)
+     * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
+     * 플레이어 목록이 비었거나 중복이거나 2~4명이 아니면 IllegalArgumentException,
+     * 같은 방 번호로 진행 중인 게임이 이미 있으면 IllegalStateException.
+     * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
+     * botIds가 비어 있지 않으면 IllegalArgumentException (봇 로직이 생기기 전까지).
+     */
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames,
+                               Set<Long> botIds, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
+        if (playerIds.size() < GameConfig.MIN_PLAYERS || playerIds.size() > GameConfig.MAX_PLAYERS) {
+            throw new IllegalArgumentException("플레이어는 " + GameConfig.MIN_PLAYERS + "~"
+                    + GameConfig.MAX_PLAYERS + "명이어야 합니다: " + playerIds.size());
+        }
+        boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
+        if (running) {
+            throw new IllegalStateException("이미 진행 중인 게임이 있는 방입니다: " + roomId);
+        }
+
+        // 봇 로직(8단계)이 생기기 전에는 봇 차례에서 게임이 멈추므로 막는다. 봇 작업 때 이 검증을 지운다.
+        if (!botIds.isEmpty()) {
+            throw new IllegalArgumentException("봇은 아직 지원하지 않습니다." + botIds);
+        }
+
         GameState state = new GameState(roomId);
-        for(long id : playerIds) {
+        state.setConfig(Objects.requireNonNull(config));
+        for (long id : playerIds) {
             PlayerState player = new PlayerState(id);
-            player.setMoney(START_MONEY);
+            player.setMoney(config.startMoney());
             player.setNickname(nicknames.getOrDefault(id, ""));
             player.setBot(botIds.contains(id));
             state.addPlayer(player);
@@ -127,7 +154,7 @@ public class GameService {
 
         MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
         if (move.passedStart()) {
-            economyService.paySalary(player);
+            economyService.paySalary(player, state.getConfig().salaryAmount());
         }
         processArrival(state, player);
 
@@ -173,14 +200,16 @@ public class GameService {
 
     /**
      * 통행료가 모자랄 때 땅을 팔아 현금을 채우고 통행료를 낸다. 매각 뒤에는 인수 선택 없이 턴을 끝낸다.
-     * 검증 순서: 목록이 비었거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
+     * 검증 순서: 목록이 null이거나 비었거나 null 값이 있거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
      * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
      */
     public synchronized GameResult sellProperties(long playerId, List<Integer> propertyIds) {
         GameState state = validate(playerId, TurnPhase.AWAITING_SELL);
         PlayerState payer = state.getPlayerState(playerId);
 
-        if (propertyIds.isEmpty() || new HashSet<>(propertyIds).size() != propertyIds.size()) {
+        if (propertyIds == null || propertyIds.isEmpty()
+            || propertyIds.stream().anyMatch(Objects::isNull)
+            || new HashSet<>(propertyIds).size() != propertyIds.size()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
         }
         List<PropertyState> selected = new ArrayList<>();
@@ -307,7 +336,7 @@ public class GameService {
 
     /**
      * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
-     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
+     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 세계여행 칸을 뺀 어디든 고를 수 있다.
      */
     public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
         GameState state = validate( playerId, TurnPhase.AWAITING_DESTINATION);
@@ -315,6 +344,10 @@ public class GameService {
 
         if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+
+        if ("WORLD_TRAVEL".equals(tileAt(destinationPosition).type())) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
         }
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN,
@@ -368,7 +401,7 @@ public class GameService {
             case "MoveTo" -> {
                 MoveService.MoveResult move = moveService.moveTo(player, card.targetTileId());
                 if (move.passedStart()) {
-                    economyService.paySalary(player);
+                    economyService.paySalary(player, state.getConfig().salaryAmount());
                 }
                 processArrival(state, player);
             }
@@ -383,7 +416,7 @@ public class GameService {
         if (steps > 0) {
             MoveService.MoveResult move = moveService.moveBy(player, steps);
             if (move.passedStart()) {
-                economyService.paySalary(player);
+                economyService.paySalary(player, state.getConfig().salaryAmount());
             }
         } else {
             int size = moveService.getTileCount();
@@ -416,12 +449,12 @@ public class GameService {
                 turnService.endTurn(state);
             }
             case "DONATION" -> {
-                economyService.payTax(state, player, EconomyService.TAX_AMOUNT);
+                economyService.payTax(state, player, state.getConfig().taxAmount());
                 turnService.endTurn(state);
             }
             case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
             case "ISLAND" -> {
-                turnService.imprison(player);
+                turnService.imprison(state, player);
                 turnService.passTurn(state); // 강제로 턴을 넘긴다.
             }
             default -> turnService.endTurn(state);

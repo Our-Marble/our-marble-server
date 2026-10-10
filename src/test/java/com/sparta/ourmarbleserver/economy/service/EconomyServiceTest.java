@@ -17,7 +17,7 @@ class EconomyServiceTest {
         PlayerState player = new PlayerState(1L);
         player.setMoney(500_000);
 
-        long paid = service.paySalary(player);
+        long paid = service.paySalary(player, EconomyService.SALARY_AMOUNT);
 
         assertThat(paid).isEqualTo(EconomyService.SALARY_AMOUNT);
         assertThat(player.getMoney()).isEqualTo(600_000);
@@ -27,8 +27,8 @@ class EconomyServiceTest {
     void 월급은_받을_때마다_쌓인다() {
         PlayerState player = new PlayerState(1L);
 
-        service.paySalary(player);
-        service.paySalary(player);
+        service.paySalary(player, EconomyService.SALARY_AMOUNT);
+        service.paySalary(player, EconomyService.SALARY_AMOUNT);
 
         assertThat(player.getMoney()).isEqualTo(2 * EconomyService.SALARY_AMOUNT);
     }

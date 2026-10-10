@@ -39,6 +39,9 @@ public class GameState {
 
     private boolean isGameOver;
 
+    /** 이 게임의 규칙 설정. 게임이 시작될 때 정해지고 끝날 때까지 바뀌지 않는다. */
+    private GameConfig config = GameConfig.defaults();
+
     /** 턴 순서. 파산한 플레이어를 건너뛰고 다음 플레이어를 찾을 때 쓴다. */
     @Getter(AccessLevel.NONE)
     private final List<Long> playerOrder = new ArrayList<>();

@@ -31,18 +31,28 @@ class GameServiceStartTest {
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
     }
 
+
     @Test
-    void 닉네임과_봇_정보를_넘기면_플레이어_상태에_들어간다() {
+    void 봇이_있으면_봇_로직이_생기기_전까지_거부된다() {
+        GameService service = newService();
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(2L)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(repository.findById(ROOM)).isEmpty();
+    }
+
+    @Test
+    void 닉네임을_넘기면_플레이어_상태에_들어간다() {
         GameService service = newService();
 
         GameState state = service.startGame(ROOM, List.of(10L, 20L, 30L),
-                Map.of(10L, "가", 20L, "나"), Set.of(30L));
+                Map.of(10L, "가", 20L, "나"), Set.of());
 
         assertThat(state.getPlayerState(10L).getNickname()).isEqualTo("가");
-        assertThat(state.getPlayerState(10L).isBot()).isFalse();
         assertThat(state.getPlayerState(20L).getNickname()).isEqualTo("나");
         assertThat(state.getPlayerState(30L).getNickname()).isEmpty();   // 목록에 없으면 빈 문자열
-        assertThat(state.getPlayerState(30L).isBot()).isTrue();
+        assertThat(state.getPlayerState(10L).isBot()).isFalse();
     }
 
     @Test
@@ -87,5 +97,52 @@ class GameServiceStartTest {
         assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 1L)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(repository.findById(ROOM)).isEmpty();
+    }
+
+    @Test
+    void 플레이어가_한_명이거나_다섯_명이면_거부된다() {
+        GameService service = newService();
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 2L, 3L, 4L, 5L)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(repository.findById(ROOM)).isEmpty();
+    }
+
+    @Test
+    void 두_명에서_네_명까지는_시작할_수_있다() {
+        GameService service = newService();
+
+        service.startGame("r1", List.of(1L, 2L));
+        service.startGame("r2", List.of(3L, 4L, 5L));
+        service.startGame("r3", List.of(6L, 7L, 8L, 9L));
+
+        assertThat(repository.findById("r1")).isPresent();
+        assertThat(repository.findById("r2")).isPresent();
+        assertThat(repository.findById("r3")).isPresent();
+    }
+
+    @Test
+    void 진행_중인_게임이_있는_방_번호로_다시_시작하면_거부되고_기존_게임은_그대로다() {
+        GameService service = newService();
+        GameState first = service.startGame(ROOM, List.of(1L, 2L));
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(3L, 4L)))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(repository.findById(ROOM).orElseThrow()).isSameAs(first);
+    }
+
+    @Test
+    void 끝난_게임의_방_번호는_다시_쓸_수_있다() {
+        GameService service = newService();
+        GameState first = service.startGame(ROOM, List.of(1L, 2L));
+        first.setGameOver(true);
+
+        GameState second = service.startGame(ROOM, List.of(3L, 4L));
+
+        assertThat(second).isNotSameAs(first);
+        assertThat(repository.findById(ROOM).orElseThrow()).isSameAs(second);
     }
 }
