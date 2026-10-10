@@ -336,7 +336,7 @@ public class GameService {
 
     /**
      * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
-     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 어디든 고를 수 있다.
+     * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 세계여행 칸을 뺀 어디든 고를 수 있다.
      */
     public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
         GameState state = validate( playerId, TurnPhase.AWAITING_DESTINATION);
@@ -344,6 +344,10 @@ public class GameService {
 
         if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
+        }
+
+        if ("WORLD_TRAVEL".equals(tileAt(destinationPosition).type())) {
+            throw new GameException(ErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
         }
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN,

@@ -173,6 +173,28 @@ class GameServiceWorldTravelTest {
     }
 
     @Test
+    void 세계여행_칸을_목적지로_고르면_거부되고_상태가_바뀌지_않는다() {
+        GameService service = newServiceChoosing();
+
+        assertRejected(() -> service.chooseDestination(1L, WORLD_TRAVEL_TILE), ErrorCode.INVALID_PROPERTY);
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void 무인도_칸은_목적지로_고를_수_있다() {
+        GameService service = newServiceChoosing();
+
+        service.chooseDestination(1L, 8);   // 무인도
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(8);
+        assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
+    }
+
+    @Test
     void 내_차례가_아니거나_목적지를_고를_phase가_아니면_거부된다() {
         GameService service = newServiceChoosing();
 
