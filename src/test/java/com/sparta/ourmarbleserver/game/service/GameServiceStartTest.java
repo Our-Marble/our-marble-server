@@ -31,18 +31,28 @@ class GameServiceStartTest {
                 new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
     }
 
+
     @Test
-    void 닉네임과_봇_정보를_넘기면_플레이어_상태에_들어간다() {
+    void 봇이_있으면_봇_로직이_생기기_전까지_거부된다() {
+        GameService service = newService();
+
+        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(2L)))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(repository.findById(ROOM)).isEmpty();
+    }
+
+    @Test
+    void 닉네임을_넘기면_플레이어_상태에_들어간다() {
         GameService service = newService();
 
         GameState state = service.startGame(ROOM, List.of(10L, 20L, 30L),
-                Map.of(10L, "가", 20L, "나"), Set.of(30L));
+                Map.of(10L, "가", 20L, "나"), Set.of());
 
         assertThat(state.getPlayerState(10L).getNickname()).isEqualTo("가");
-        assertThat(state.getPlayerState(10L).isBot()).isFalse();
         assertThat(state.getPlayerState(20L).getNickname()).isEqualTo("나");
         assertThat(state.getPlayerState(30L).getNickname()).isEmpty();   // 목록에 없으면 빈 문자열
-        assertThat(state.getPlayerState(30L).isBot()).isTrue();
+        assertThat(state.getPlayerState(10L).isBot()).isFalse();
     }
 
     @Test

@@ -78,6 +78,7 @@ public class GameService {
      * 플레이어 목록이 비었거나 중복이거나 2~4명이 아니면 IllegalArgumentException,
      * 같은 방 번호로 진행 중인 게임이 이미 있으면 IllegalStateException.
      * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
+     * botIds가 비어 있지 않으면 IllegalArgumentException (봇 로직이 생기기 전까지).
      */
     public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames,
                                Set<Long> botIds, GameConfig config) {
@@ -91,6 +92,11 @@ public class GameService {
         boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
         if (running) {
             throw new IllegalStateException("이미 진행 중인 게임이 있는 방입니다: " + roomId);
+        }
+
+        // 봇 로직(8단계)이 생기기 전에는 봇 차례에서 게임이 멈추므로 막는다. 봇 작업 때 이 검증을 지운다.
+        if (!botIds.isEmpty()) {
+            throw new IllegalArgumentException("봇은 아직 지원하지 않습니다." + botIds);
         }
 
         GameState state = new GameState(roomId);
