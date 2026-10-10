@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.economy.service;
 
 
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import org.springframework.stereotype.Service;
@@ -12,15 +13,15 @@ import org.springframework.stereotype.Service;
 @Service
 public class EconomyService {
     /** 월급 (출발 지점을 지나면 지급) */
-    public static final long SALARY_AMOUNT = 100_000;
+    public static final long SALARY_AMOUNT = GameConfig.DEFAULT_SALARY_AMOUNT;
 
     /** 세무조사 세금 (세무조사 칸에 도착하면 부과, 적립금에 쌓임) */
-    public static final long TAX_AMOUNT = 100_000;
+    public static final long TAX_AMOUNT = GameConfig.DEFAULT_TAX_AMOUNT;
 
     /** 월급을 현금에 더한다. 지급한 금액을 돌려준다. */
-    public long paySalary(PlayerState player) {
-        player.addMoney(SALARY_AMOUNT);
-        return SALARY_AMOUNT;
+    public long paySalary(PlayerState player, long amount) {
+        player.addMoney(amount);
+        return amount;
     }
 
     /** 비용(땅값 등)을 현금에서 뺀다. 잔액이 충분한지는 호출하는 쪽이 먼저 확인한다. */

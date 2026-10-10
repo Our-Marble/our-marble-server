@@ -35,7 +35,7 @@ import java.util.*;
 public class GameService {
 
     /** 초기 자금 */
-    public static final long START_MONEY = 500_000;
+    public static final long START_MONEY = GameConfig.DEFAULT_START_MONEY;
     private final GameStateRepository repository;
     private final DiceService diceService;
     private final MoveService moveService;
@@ -65,18 +65,28 @@ public class GameService {
 
     /**
      * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
+     * 기본 설정(GameConfig.defaults())으로 시작한다.
+     */
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
+        return startGame(roomId, playerIds, nicknames, botIds, GameConfig.defaults());
+    }
+
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. playerIds의 순서가 턴 순서다.
+     * config의 초기 자금, 월급, 세금, 최대 라운드, 무인도 영업정지 턴으로 진행한다. (방장이 정한 설정)
      * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
      * 플레이어 목록이 비었거나 중복이면 IllegalArgumentException.
      * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
      */
-    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
         GameState state = new GameState(roomId);
+        state.setConfig(Objects.requireNonNull(config));
         for(long id : playerIds) {
             PlayerState player = new PlayerState(id);
-            player.setMoney(START_MONEY);
+            player.setMoney(config.startMoney());
             player.setNickname(nicknames.getOrDefault(id, ""));
             player.setBot(botIds.contains(id));
             state.addPlayer(player);
@@ -127,7 +137,7 @@ public class GameService {
 
         MoveService.MoveResult move = moveService.moveBy(player, dice.sum());
         if (move.passedStart()) {
-            economyService.paySalary(player);
+            economyService.paySalary(player, state.getConfig().salaryAmount());
         }
         processArrival(state, player);
 
@@ -368,7 +378,7 @@ public class GameService {
             case "MoveTo" -> {
                 MoveService.MoveResult move = moveService.moveTo(player, card.targetTileId());
                 if (move.passedStart()) {
-                    economyService.paySalary(player);
+                    economyService.paySalary(player, state.getConfig().salaryAmount());
                 }
                 processArrival(state, player);
             }
@@ -383,7 +393,7 @@ public class GameService {
         if (steps > 0) {
             MoveService.MoveResult move = moveService.moveBy(player, steps);
             if (move.passedStart()) {
-                economyService.paySalary(player);
+                economyService.paySalary(player, state.getConfig().salaryAmount());
             }
         } else {
             int size = moveService.getTileCount();
@@ -416,12 +426,12 @@ public class GameService {
                 turnService.endTurn(state);
             }
             case "DONATION" -> {
-                economyService.payTax(state, player, EconomyService.TAX_AMOUNT);
+                economyService.payTax(state, player, state.getConfig().taxAmount());
                 turnService.endTurn(state);
             }
             case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
             case "ISLAND" -> {
-                turnService.imprison(player);
+                turnService.imprison(state, player);
                 turnService.passTurn(state); // 강제로 턴을 넘긴다.
             }
             default -> turnService.endTurn(state);
