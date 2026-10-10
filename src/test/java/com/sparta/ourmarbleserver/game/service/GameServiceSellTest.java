@@ -3,6 +3,7 @@ package com.sparta.ourmarbleserver.game.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -152,6 +153,29 @@ class GameServiceSellTest {
 
         assertRejected(() -> service.sellProperties(1L, List.of(101, 101)), ErrorCode.INVALID_PROPERTY_LIST);
         assertThat(property(101).isOwnedBy(1L)).isTrue();
+    }
+
+    @Test
+    void 목록이_null이면_거부된다() {
+        GameService service = newService();
+
+        assertRejected(() -> service.sellProperties(1L, null), ErrorCode.INVALID_PROPERTY_LIST);
+
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_SELL);
+        assertThat(property(101).isOwnedBy(1L)).isTrue();
+    }
+
+    @Test
+    void 목록에_null_값이_있으면_거부된다() {
+        GameService service = newService();
+        List<Integer> withNull = new ArrayList<>();
+        withNull.add(101);
+        withNull.add(null);
+
+        assertRejected(() -> service.sellProperties(1L, withNull), ErrorCode.INVALID_PROPERTY_LIST);
+
+        assertThat(property(101).isOwnedBy(1L)).isTrue();
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
     }
 
     @Test

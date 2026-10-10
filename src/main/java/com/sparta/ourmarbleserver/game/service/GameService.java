@@ -183,14 +183,16 @@ public class GameService {
 
     /**
      * 통행료가 모자랄 때 땅을 팔아 현금을 채우고 통행료를 낸다. 매각 뒤에는 인수 선택 없이 턴을 끝낸다.
-     * 검증 순서: 목록이 비었거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
+     * 검증 순서: 목록이 null이거나 비었거나 null 값이 있거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
      * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
      */
     public synchronized GameResult sellProperties(long playerId, List<Integer> propertyIds) {
         GameState state = validate(playerId, TurnPhase.AWAITING_SELL);
         PlayerState payer = state.getPlayerState(playerId);
 
-        if (propertyIds.isEmpty() || new HashSet<>(propertyIds).size() != propertyIds.size()) {
+        if (propertyIds == null || propertyIds.isEmpty()
+            || propertyIds.stream().anyMatch(Objects::isNull)
+            || new HashSet<>(propertyIds).size() != propertyIds.size()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
         }
         List<PropertyState> selected = new ArrayList<>();
