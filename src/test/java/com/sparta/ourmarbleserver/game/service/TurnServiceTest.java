@@ -79,7 +79,7 @@ class TurnServiceTest {
         service.startTurn(state, 1L);
         state.setDouble(true);
         state.setConsecutiveDoubleCount(2);
-        state.setPhase(TurnPhase.TURN_END);
+        state.setPhase(TurnPhase.AWAITING_PURCHASE);
 
         service.endTurn(state);
 

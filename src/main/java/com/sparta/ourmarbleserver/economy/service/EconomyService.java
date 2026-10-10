@@ -44,10 +44,7 @@ public class EconomyService {
      * 실제로 낸 금액을 돌려준다. (예: 세금 100,000인데 현금 30,000이면 30,000만 냄)
      */
     public long payTax(GameState state, PlayerState player, long amount) {
-        long paid = Math.min(amount, Math.max(0, player.getMoney()));
-        player.addMoney(-paid);
-        state.setWelfareFund(state.getWelfareFund() + paid);
-        return paid;
+        return payPenalty(state, player, amount, true);
     }
 
     /** 현금 한도 안에서만 비용을 낸다. (벌금 등, 매각·파산 없음) 실제로 낸 금액을 돌려준다. */
