@@ -427,14 +427,23 @@ class LobbyServiceTest {
     }
 
     @Test
-    void 시작한_방과_대기_방에_같이_있으면_대기_방을_찾는다() {
+    void 시작한_방에_있는_사람도_방을_찾을_수_있다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(room.roomId());
+    }
+
+    @Test
+    void 시작한_방에_있는_사람은_새_방을_만들거나_입장할_수_없다() {
         RoomInfo started = roomWithTwo();
         service.setReady(started.roomId(), P2, true);
         service.start(started.roomId(), HOST);
-        RoomInfo waiting = service.createRoom(HOST, MAP, 4);
+        RoomInfo other = service.createRoom(P3, MAP, 4);
 
-        assertThat(service.findRoomByPlayer(HOST).roomId()).isEqualTo(waiting.roomId());
-        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(started.roomId());
+        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.join(other.roomId(), P2));
     }
 
     // ===== 게임 종료 =====

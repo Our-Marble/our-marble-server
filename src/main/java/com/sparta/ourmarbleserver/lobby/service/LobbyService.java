@@ -41,14 +41,14 @@ public class LobbyService {
 
     /**
      * 방을 만든다. 만든 사람이 방장이고 자동으로 참가한다.
-     * maxPlayers가 2~4가 아니면 INVALID_STATE, 이미 대기 중인 방에 있으면 ALREADY_IN_ROOM.
+     * maxPlayers가 2~4가 아니면 INVALID_STATE, 이미 어떤 방에든(시작한 방 포함) 있으면 ALREADY_IN_ROOM.
      * mapId는 검증하지 않는다. (맵 목록이 서버에 없다)
      */
     public synchronized RoomInfo createRoom(long playerId, int mapId, int maxPlayers) {
         if (maxPlayers < MIN_PLAYERS || maxPlayers > MAX_PLAYERS) {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
-        requireNotInWaitingRoom(playerId);
+        requireNotInAnyRoom(playerId);
 
         Room room = new Room("r_" + roomSequence.incrementAndGet(), playerId, mapId, maxPlayers);
         room.addMember(playerId, true);
@@ -72,12 +72,12 @@ public class LobbyService {
     /**
      * 이 플레이어가 들어 있는 방을 찾는다. 어느 방에도 없으면 NOT_IN_ROOM.
      * 요청에는 roomId가 실리지 않아서(LEAVE_ROOM, START_GAME) 요청한 사람의 방을 이걸로 찾는다.
-     * 대기 방과 시작한 방에 같이 들어 있으면 대기 방을 돌려준다.
+     * 한 플레이어는 방 하나에만 들어갈 수 있다. (시작한 방 포함)s
      */
     public synchronized RoomInfo findRoomByPlayer(long playerId) {
         return repository.findAll().stream()
                 .filter(room -> room.hasMember(playerId))
-                .min(Comparator.comparing((Room room) -> room.getStatus() != RoomStatus.WAITING))
+                .findFirst()
                 .map(this::toInfo)
                 .orElseThrow(() -> new GameException(ErrorCode.NOT_IN_ROOM));
     }
@@ -86,14 +86,14 @@ public class LobbyService {
 
     /**
      * 참가. 없는 방 ROOM_NOT_FOUND → 시작한 방 ROOM_ALREADY_STARTED
-     * → 이미 대기 중인 방에 있음 ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
+     * → 이미 어떤 방에 있음(시작한 방 포함) ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
      */
     public synchronized RoomInfo join(String roomId, long playerId) {
         Room room = findRoom(roomId);
         if (room.getStatus() != RoomStatus.WAITING) {
             throw new GameException(ErrorCode.ROOM_ALREADY_STARTED);
         }
-        requireNotInWaitingRoom(playerId);
+        requireNotInAnyRoom(playerId);
         if (room.isFull()) {
             throw new GameException(ErrorCode.ROOM_FULL);
         }
@@ -222,10 +222,10 @@ public class LobbyService {
                 .orElseThrow(() -> new GameException(ErrorCode.ROOM_NOT_FOUND));
     }
 
-    /** 대기 중인 방 중 이 플레이어가 이미 들어가 있는 방이 있으면 거부한다. */
-    private void requireNotInWaitingRoom(long playerId) {
+    /** 이 플레이어가 이미 들어가 있는 방이 있으면(시작한 방 포함) 거부한다. */
+    private void requireNotInAnyRoom(long playerId) {
         boolean alreadyIn = repository.findAll().stream()
-                .anyMatch(room -> room.getStatus() == RoomStatus.WAITING && room.hasMember(playerId));
+                .anyMatch(room -> room.hasMember(playerId));
         if (alreadyIn) {
             throw new GameException(ErrorCode.ALREADY_IN_ROOM);
         }
