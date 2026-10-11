@@ -32,8 +32,7 @@ class GameServicePurchaseTest {
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data);
         service.startGame(ROOM, List.of(1L, 2L));
 
         GameState state = state();

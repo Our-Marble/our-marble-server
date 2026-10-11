@@ -25,8 +25,7 @@ class GameServiceStartTest {
 
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        return new GameService(repository, new DiceService(),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        return GameTestSupport.newGameService(repository, data);
     }
 
 
