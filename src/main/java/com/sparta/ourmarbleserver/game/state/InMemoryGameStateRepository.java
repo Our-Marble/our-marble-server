@@ -21,7 +21,8 @@ public class InMemoryGameStateRepository implements GameStateRepository {
     public Optional<GameState> findByPlayerId(long playerId) {
         return store.values(). stream()
                 .filter(state -> !state.isGameOver())
-                .filter(state -> state.players().stream().anyMatch(player -> player.getPlayerId() == playerId))
+                .filter(state -> state.players().stream()
+                        .anyMatch(player -> player.getPlayerId() == playerId && !player.isBankrupt()))
                 .findFirst();
     }
 

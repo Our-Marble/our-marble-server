@@ -1,15 +1,5 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.card.dto.CardDrawnPayload;
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.CardData;
@@ -21,9 +11,13 @@ import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 황금열쇠(DRAW_CARD) 테스트. 카드 효과의 값(금액, 이동 칸 수 등)은 cards.json에서 읽어서 쓰므로 값이 바뀌어도 깨지지 않는다.
@@ -36,21 +30,6 @@ class GameServiceCardTest {
     private static final int KEY_TILE = 2;
     private static final int ISLAND_TILE = 8;
 
-    /** 정해 둔 값(주사위 눈, 카드 번호 + 1)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private final GameDataService data = new GameDataService(JsonMapper.builder().build());
@@ -72,8 +51,7 @@ class GameServiceCardTest {
 
     /** 플레이어 1이 황금열쇠 칸에서 카드 뽑기를 기다리는 상태. randoms는 FixedRandom에 들어갈 값이다. */
     private GameService newService(int... randoms) {
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(randoms)),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(randoms));
         service.startGame(ROOM, List.of(1L, 2L));
         state().getPlayerState(1L).setPosition(KEY_TILE);
         state().setPhase(TurnPhase.AWAITING_DRAW_CARD);

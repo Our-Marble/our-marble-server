@@ -10,14 +10,16 @@ package com.sparta.ourmarbleserver.game.state;
  * @param taxAmount    세무조사 세금 (세무조사 칸에 도착하면 부과, 적립금에 쌓임)
  * @param maxRound     최대 라운드. 이 라운드를 넘기면 게임이 끝난다.
  * @param islandTurns  무인도 영업정지 턴 수
+ * @param mapId        맵 번호. 방장이 로비에서 고른 맵이다. 맵 목록이 서버에 없어서 값의 범위는 검증하지 않는다.
  */
-public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns) {
+public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns, int mapId) {
 
     public static final long DEFAULT_START_MONEY = 500_000;
     public static final long DEFAULT_SALARY_AMOUNT = 100_000;
     public static final long DEFAULT_TAX_AMOUNT = 100_000;
     public static final int DEFAULT_MAX_ROUND = 30;
     public static final int DEFAULT_ISLAND_TURNS = 3;
+    public static final int DEFAULT_MAP_ID = 1;
 
     /** 한 게임에 참가할 수 있는 플레이어 수의 한계. 방장이 바꾸는 설정이 아니라 서버 규칙의 한계다. */
     public static final int MIN_PLAYERS = 2;
@@ -42,9 +44,19 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
         }
     }
 
+    /** 맵 번호를 정하지 않으면 기본 맵(DEFAULT_MAP_ID)을 쓴다. */
+    public GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns) {
+        this(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, DEFAULT_MAP_ID);
+    }
+
+    /** 맵 번호만 바꾼 설정을 돌려준다. (로비가 방의 맵 번호를 넣을 때 쓴다) */
+    public GameConfig withMapId(int mapId) {
+        return new GameConfig(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, mapId);
+    }
+
     /** 기본 설정. 방장이 따로 고르지 않았을 때 쓴다. */
     public static GameConfig defaults() {
         return new GameConfig(DEFAULT_START_MONEY, DEFAULT_SALARY_AMOUNT, DEFAULT_TAX_AMOUNT,
-                DEFAULT_MAX_ROUND, DEFAULT_ISLAND_TURNS);
+                DEFAULT_MAX_ROUND, DEFAULT_ISLAND_TURNS, DEFAULT_MAP_ID);
     }
 }
