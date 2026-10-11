@@ -129,12 +129,12 @@ class GameServiceBankruptTest {
     }
 
     @Test
-    void 파산한_플레이어가_다시_요청하면_거부된다() {
+    void 파산한_플레이어가_다시_요청하면_속한_게임이_없어서_거부된다() {
         GameService service = newService(3, 1, 2);
         service.rollDice(1L);
 
         assertThatThrownBy(() -> service.rollDice(1L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
     }
 }
