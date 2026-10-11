@@ -35,13 +35,14 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     private final MessageCodec codec;
     private final SessionRegistry sessionRegistry;
     private final MessageRouter router;
+    private final WebSocketMessageSender sender;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         long playerId = playerIdOf(session);
         log.info("[WS] 연결: player={} session={}", playerId, session.getId());
         sessionRegistry.register(playerId, session);    // 등록 먼저
-        send(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId));
+        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId));
     }
 
     @Override
@@ -81,11 +82,6 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendError(long playerId, ErrorCode code) {
-        send(playerId, MessageType.ERROR, ErrorPayload.of(code));
-    }
-
-    // 한 명에게 보낸다. (2단계에서 WebSocketMessageSender로 옮길 예정)
-    private void send(long playerId, MessageType type, Object payload) {
-        sessionRegistry.send(playerId, codec.encode(type, payload));
+        sender.sendToPlayer(playerId, MessageType.ERROR, ErrorPayload.of(code));
     }
 }
