@@ -17,6 +17,7 @@ import com.sparta.ourmarbleserver.property.service.PropertyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -452,6 +453,16 @@ public class GameService {
         if (justEnded) {
             eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
         }
+    }
+
+    /**
+     * 게임이 끝나면(GameEndedEvent) 그 방의 게임 상태를 지운다. 결과 화면은 클라가 처리하므로 서버는 상태를 남기지 않는다.
+     * save()가 요청 처리 락을 잡은 채 이벤트를 내보내서 이 함수도 같은 스레드에서 불린다. 락은 따로 걸지 않는다.
+     * (방은 로비가 WAITING으로 되돌린다)
+     */
+    @EventListener
+    public void onGameEnded(GameEndedEvent event) {
+        repository.deleteById(event.roomId());
     }
 
     /**
