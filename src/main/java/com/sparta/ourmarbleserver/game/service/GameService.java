@@ -8,7 +8,6 @@ import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
@@ -32,6 +31,7 @@ import java.util.*;
  * 요청은 roomId를 받지 않고, playerId로 그 플레이어가 속한 진행 중인 게임을 찾는다.
  * 도착 칸 처리(통행료 정산, 파산)는 ArrivalService가 하고, 이 클래스를 거쳐서만 불린다.
  * 카드 효과 적용은 CardService가 하고, 이 클래스를 거쳐서만 불린다.
+ * 땅 거래 규칙(구매, 건설, 인수, 매각)은 PropertyTradeService가 하고, 이 클래스를 거쳐서만 불린다.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +48,7 @@ public class GameService {
     private final GameDataService gameDataService;
     private final ArrivalService arrivalService;
     private final CardService cardService;
+    private final PropertyTradeService tradeService;
 
     /**
      * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.
@@ -179,24 +180,10 @@ public class GameService {
     public synchronized GameResult purchaseProperty(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_PURCHASE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
-        requireStandingOn(player, propertyId);
-
-        if(isAccept) {
-            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
-            if(property.hasOwner()) {
-                throw new GameException(ErrorCode.ALREADY_OWNED);
-            }
-            long price = propertyService.getLandPrice(propertyId);
-            if(player.getMoney() < price) {
-                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
-            }
-
-            economyService.charge(player, price);
-            property.setOwnerId(playerId);
-        }
+        tradeService.purchase(state, player, propertyId, isAccept);
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_PURCHASED,
-                new PropertyPurchasedPayload(playerId, propertyId, isAccept));
+                new  PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
@@ -214,33 +201,7 @@ public class GameService {
         GameState state = validate(playerId, TurnPhase.AWAITING_SELL);
         PlayerState payer = state.getPlayerState(playerId);
 
-        if (propertyIds == null || propertyIds.isEmpty()
-            || propertyIds.stream().anyMatch(Objects::isNull)
-            || new HashSet<>(propertyIds).size() != propertyIds.size()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
-        }
-        List<PropertyState> selected = new ArrayList<>();
-        for (int propertyId : propertyIds) {
-            PropertyState property = state.getPropertyState(propertyId)
-                    .orElseThrow(() -> new GameException(ErrorCode.INVALID_PROPERTY));
-            if (!property.isOwnedBy(playerId)) {
-                throw new GameException(ErrorCode.NOT_OWNER);
-            }
-            selected.add(property);
-        }
-
-        PropertyState tollProperty = findTollProperty(state, payer);
-        long toll = propertyService.getToll(tollProperty);
-        long proceeds = selected.stream().mapToLong(propertyService::getSellValue).sum();
-        if (payer.getMoney() + proceeds < toll) {
-            throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
-        }
-
-        // 검증이 모두 끝났으니 상태를 바꾼다.
-        selected.forEach(PropertyState::reset);
-        economyService.deposit(payer, proceeds);
-        economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
-
+        tradeService.sell(state, payer, propertyIds);
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTIES_SOLD,
                 new PropertiesSoldPayload(playerId, propertyIds));
@@ -248,20 +209,6 @@ public class GameService {
 
         save(state);
         return result;
-    }
-
-    /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
-    private PropertyState findTollProperty(GameState state, PlayerState payer) {
-        TileData tile = tileAt(payer.getPosition());
-        if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
-            throw new GameException(ErrorCode.INVALID_STATE);
-        }
-        PropertyState property = state.getPropertyState(tile.propertyId())
-                .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
-        if (!property.hasOwner() || property.isOwnedBy(payer.getPlayerId())) {
-            throw new GameException(ErrorCode.INVALID_STATE);
-        }
-        return property;
     }
 
     // ===== 건설 / 거절 =====
@@ -274,28 +221,8 @@ public class GameService {
     public synchronized GameResult build(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_BUILD, propertyId);
         PlayerState player = state.getPlayerState(playerId);
-        requireStandingOn(player, propertyId);
 
-        if(isAccept) {
-            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
-            if (!property.isOwnedBy(playerId)) {
-                throw new GameException(ErrorCode.NOT_OWNER);
-            }
-            if (!propertyService.canBuild(propertyId)) {
-                throw new GameException(ErrorCode.CANNOT_BUILD);
-            }
-            if (property.getBuildingLevel() == BuildingLevel.HOTEL) {
-                throw new GameException(ErrorCode.MAX_LEVEL);
-            }
-            BuildingLevel nextLevel = BuildingLevel.fromIndex(property.getBuildingLevel().index() + 1);
-            long cost = propertyService.getBuildCost(propertyId, nextLevel);
-            if (player.getMoney() < cost) {
-                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
-            }
-
-            economyService.charge(player, cost);
-            property.setBuildingLevel(nextLevel);
-        }
+        tradeService.build(state, player, propertyId, isAccept);
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.BUILT,
                 new BuiltPayload(playerId, propertyId, isAccept));
@@ -315,21 +242,8 @@ public class GameService {
     public synchronized GameResult acquireProperty(long playerId, int propertyId, boolean isAccept) {
         GameState state = validate(playerId, TurnPhase.AWAITING_ACQUIRE, propertyId);
         PlayerState player = state.getPlayerState(playerId);
-        requireStandingOn(player, propertyId);
 
-        if(isAccept) {
-            PropertyState property = state.getPropertyState(propertyId).orElseThrow();
-            if (!property.hasOwner() || property.isOwnedBy(playerId)) {
-                throw new GameException(ErrorCode.CANNOT_ACQUIRE);
-            }
-            long price = propertyService.getAcquireValue(property);
-            if (player.getMoney() < price) {
-                throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
-            }
-
-            economyService.transfer(player, state.getPlayerState(property.getOwnerId()), price); // 주인이 바뀌기 전에 이체
-            property.setOwnerId(playerId);
-        }
+        tradeService.acquire(state, player, propertyId, isAccept);
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_ACQUIRED,
                 new PropertyAcquiredPayload(playerId, propertyId, isAccept));
@@ -393,8 +307,6 @@ public class GameService {
         save(state);
         return result;
     }
-
-
 
     // ===== 게임 종료 =====
 
@@ -472,14 +384,6 @@ public class GameService {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
         return state;
-    }
-
-    /** 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다. */
-    private void requireStandingOn(PlayerState player, int propertyId) {
-        TileData tile = tileAt(player.getPosition());
-        if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
-        }
     }
     private TileData tileAt(int position) {
         return gameDataService.getTiles().get(position);

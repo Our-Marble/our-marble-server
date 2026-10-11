@@ -28,7 +28,8 @@ final class GameTestSupport {
         PropertyService propertyService = new PropertyService(data);
         ArrivalService arrivalService = new ArrivalService(turnService, economyService, propertyService, data);
         CardService cardService = new CardService(turnService, moveService, economyService, arrivalService);
+        PropertyTradeService tradeService = new PropertyTradeService(economyService, propertyService, data);
         return new GameService(repository, new DiceService(random), moveService,
-                turnService, economyService, propertyService, data, arrivalService, cardService);
+                turnService, economyService, propertyService, data, arrivalService, cardService, tradeService);
     }
 }
