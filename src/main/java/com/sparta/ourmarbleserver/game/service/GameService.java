@@ -77,8 +77,10 @@ public class GameService {
      * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
      * 플레이어 목록이 비었거나 중복이거나 2~4명이 아니면 IllegalArgumentException,
      * 같은 방 번호로 진행 중인 게임이 이미 있으면 IllegalStateException.
-     * 새 방의 상태를 만드는 것이라 다른 요청과 겹치지 않아 synchronized를 붙이지 않는다.
-     * botIds가 비어 있지 않으면 IllegalArgumentException (봇 로직이 생기기 전까지).
+     * synchronized를 붙이지 않는다. 요청 처리 함수는 서비스 락을 잡은 채 save()에서 종료 이벤트를 내보내고,
+     * 그 이벤트를 받는 LobbyService.onGameEnded는 로비 락을 기다린다. 반대로 LobbyService.start는 로비 락을 잡은 채
+     * 이 함수를 부른다. 여기에 서비스 락을 걸면 두 락이 서로를 기다려 교착이 생긴다.
+     * (같은 방 번호의 동시 시작은 로비의 start가 이미 직렬화한다)
      */
     public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames,
                                Set<Long> botIds, GameConfig config) {
