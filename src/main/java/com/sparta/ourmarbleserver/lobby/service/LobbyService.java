@@ -3,6 +3,7 @@ package com.sparta.ourmarbleserver.lobby.service;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
@@ -29,8 +30,6 @@ import java.util.concurrent.atomic.AtomicLong;
 @Service
 @RequiredArgsConstructor
 public class LobbyService {
-    public static final int MIN_PLAYERS=2;
-    public static final int MAX_PLAYERS=4;
 
     private final RoomRepository repository;
     private final GameService gameService;
@@ -45,7 +44,7 @@ public class LobbyService {
      * mapId는 검증하지 않는다. (맵 목록이 서버에 없다)
      */
     public synchronized RoomInfo createRoom(long playerId, int mapId, int maxPlayers) {
-        if (maxPlayers < MIN_PLAYERS || maxPlayers > MAX_PLAYERS) {
+        if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS) {
             throw new GameException(ErrorCode.INVALID_STATE);
         }
         requireNotInAnyRoom(playerId);
@@ -167,7 +166,7 @@ public class LobbyService {
         if (room.getHostId() != playerId) {
             throw new GameException(ErrorCode.NOT_HOST);
         }
-        if (room.size() < MIN_PLAYERS) {
+        if (room.size() < GameConfig.MIN_PLAYERS) {
             throw new GameException(ErrorCode.NOT_ENOUGH_PLAYERS);
         }
         if (!room.allReady()) {
