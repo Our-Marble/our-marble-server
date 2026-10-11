@@ -1,24 +1,17 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
-
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 무인도 테스트. 칸 번호: 무인도 8 / 황금열쇠 11 / 땅 112는 12번 칸. 영업정지는 3턴이다.
@@ -29,29 +22,13 @@ class GameServiceIslandTest {
     private static final String ROOM = "r1";
     private static final int ISLAND_TILE = 8;
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
 
     /** 플레이어 1이 startPosition에서 faces 눈으로 굴리는 상태의 서비스 */
     private GameService newService(int startPosition, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         service.startGame(ROOM, List.of(1L, 2L));
         state().getPlayerState(1L).setPosition(startPosition);
         return service;

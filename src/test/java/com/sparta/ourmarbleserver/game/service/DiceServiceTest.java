@@ -1,33 +1,13 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.Random;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.game.service.DiceService.DiceResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DiceServiceTest {
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;   // roll()이 +1 해서 쓰므로 눈에서 1을 뺀 값을 준다
-        }
-    }
 
     @Test
     void 주사위_눈은_1에서_6_사이다() {

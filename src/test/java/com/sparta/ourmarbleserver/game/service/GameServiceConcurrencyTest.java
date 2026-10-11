@@ -1,6 +1,14 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.sparta.ourmarbleserver.economy.service.EconomyService;
+import com.sparta.ourmarbleserver.game.state.GameState;
+import com.sparta.ourmarbleserver.game.state.GameStateRepository;
+import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
+import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import com.sparta.ourmarbleserver.global.exception.GameException;
+import com.sparta.ourmarbleserver.property.service.PropertyService;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -9,17 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
-import tools.jackson.databind.json.JsonMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 같은 요청이 동시에 여러 번 와도 한 번만 처리되는지 확인한다.
@@ -37,8 +35,7 @@ class GameServiceConcurrencyTest {
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data);
         service.startGame(ROOM, List.of(1L, 2L));
 
         GameState state = repository.findById(ROOM).orElseThrow();

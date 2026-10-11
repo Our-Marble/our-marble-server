@@ -1,22 +1,20 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 게임 시작(startGame) 테스트: 로비가 넘기는 플레이어 목록, 닉네임, 봇 정보. */
 class GameServiceStartTest {
@@ -27,8 +25,7 @@ class GameServiceStartTest {
 
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        return new GameService(repository, new DiceService(),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        return GameTestSupport.newGameService(repository, data);
     }
 
 

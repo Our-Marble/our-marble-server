@@ -1,28 +1,19 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
+import com.sparta.ourmarbleserver.game.state.*;
+import com.sparta.ourmarbleserver.global.exception.GameException;
+import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Queue;
-import java.util.Random;
 import java.util.stream.LongStream;
 
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.PlayerState;
-import com.sparta.ourmarbleserver.game.state.PropertyState;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
-import tools.jackson.databind.json.JsonMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 
 /**
  * 게임 종료 테스트: 최종 등수 부여와 종료 이벤트.
@@ -33,29 +24,13 @@ class GameServiceEndTest {
 
     private static final String ROOM = "r1";
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private final List<Object> ended = new ArrayList<>();
 
     private GameService newService(int playerCount, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         service.setEventPublisher(ended::add);
         service.startGame(ROOM, LongStream.rangeClosed(1, playerCount).boxed().toList());
         return service;
@@ -195,5 +170,25 @@ class GameServiceEndTest {
         assertThat(player(1L).getFinalRank()).isEqualTo(1);
         assertThat(player(2L).getFinalRank()).isEqualTo(2);
         assertThat(player(3L).getFinalRank()).isEqualTo(3);
+    }
+    @Test
+    void 게임이_끝나면_게임_상태가_삭제되고_같은_방_번호로_다시_시작할_수_있다() {
+        GameService service = newService(2, 1, 2);
+        service.setEventPublisher(event -> {
+            ended.add(event);
+            service.onGameEnded((GameEndedEvent) event);   // 실제 실행처럼 이벤트를 서비스가 직접 받는다
+        });
+        prepareBankruptcy();
+
+        service.rollDice(1L);
+
+        assertThat(ended).containsExactly(new GameEndedEvent(ROOM));
+        assertThat(repository.findById(ROOM)).isEmpty();
+        assertThatThrownBy(() -> service.rollDice(2L))
+                .isInstanceOfSatisfying(GameException.class,
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
+
+        service.startGame(ROOM, List.of(1L, 2L));   // 로비가 같은 방에서 새 게임을 시작할 수 있다
+        assertThat(repository.findById(ROOM)).isPresent();
     }
 }
