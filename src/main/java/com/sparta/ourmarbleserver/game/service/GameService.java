@@ -31,6 +31,7 @@ import java.util.*;
  * 요청 처리 함수는 synchronized로 한 번에 하나씩 처리한다. (같은 요청이 겹치면 상태가 꼬이므로, startGame은 새 방이라 제외)
  * 요청은 roomId를 받지 않고, playerId로 그 플레이어가 속한 진행 중인 게임을 찾는다.
  * 도착 칸 처리(통행료 정산, 파산)는 ArrivalService가 하고, 이 클래스를 거쳐서만 불린다.
+ * 카드 효과 적용은 CardService가 하고, 이 클래스를 거쳐서만 불린다.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,9 +47,10 @@ public class GameService {
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
     private final ArrivalService arrivalService;
+    private final CardService cardService;
 
     /**
-     * 게임 종료 이벤트를 내보내는 곳. 로비가 이 이벤트를 받아 방을 지운다.
+     * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.
      * GameService가 LobbyService를 직접 알면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 알린다.
      * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 기본값은 아무것도 하지 않는다.
      */
@@ -386,60 +388,13 @@ public class GameService {
         GameResult result = GameResult.of(state.getRoomId(), MessageType.CARD_DRAWN,
                 new CardDrawnPayload(playerId, card.id()));
 
-        applyCardEffect(state, player, card);
+        cardService.applyCardEffect(state, player, card);
 
         save(state);
         return result;
     }
 
-    /** 카드 효과를 적용하고 다음 흐름(턴 종료 또는 도착 칸 처리)까지 진행한다. (클라 ExecuteCardEffect) */
-    private void applyCardEffect(GameState state, PlayerState player, CardData card) {
-        switch (card.effectType()) {
-            case "Bonus" -> {
-                economyService.deposit(player, card.amount());
-                turnService.endTurn(state);
-            }
-            case "Penalty" -> {
-                economyService.payPenalty(state, player, card.amount(), card.penaltyToFestivalPool());
-                turnService.endTurn(state);
-            }
-            case "MoveTo" -> {
-                MoveService.MoveResult move = moveService.moveTo(player, card.targetTileId());
-                if (move.passedStart()) {
-                    economyService.paySalary(player, state.getConfig().salaryAmount());
-                }
-                arrivalService.processArrival(state, player);
-            }
-            case "MoveBy" -> moveByCard(state, player, card.steps());
-            case "GoToInspection" -> goToIsland(state, player);
-            default -> turnService.endTurn(state); // 알 수 없는 효과는 턴이 멈추지 않도록 종료한다.
-        }
-    }
 
-    /** N칸 이동 카드. 양수면 앞으로(출발 지점을 지나면 월급), 음수면 뒤로(월급 없음). */
-    private void moveByCard(GameState state, PlayerState player, int steps) {
-        if (steps > 0) {
-            MoveService.MoveResult move = moveService.moveBy(player, steps);
-            if (move.passedStart()) {
-                economyService.paySalary(player, state.getConfig().salaryAmount());
-            }
-        } else {
-            int size = moveService.getTileCount();
-            moveService.moveDirectly(player, ((player.getPosition() + steps) % size + size) % size);
-        }
-        arrivalService.processArrival(state, player);
-    }
-
-    /** 무인도 카드. 월급 없이 무인도로 가고, 도착 처리에서 영업정지가 시작되고 턴이 넘어간다. */
-    private void goToIsland(GameState state, PlayerState player) {
-        OptionalInt island = turnService.findIslandPosition();
-        if (island.isEmpty()) {
-            turnService.endTurn(state);
-            return;
-        }
-        moveService.moveDirectly(player, island.getAsInt());
-        arrivalService.processArrival(state, player);
-    }
 
     // ===== 게임 종료 =====
 

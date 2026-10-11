@@ -23,10 +23,12 @@ final class GameTestSupport {
     /** 주사위 눈과 카드 뽑기가 random으로 정해지는 GameService */
     static GameService newGameService(GameStateRepository repository, GameDataService data, Random random) {
         TurnService turnService = new TurnService(data);
+        MoveService moveService = new MoveService(data);
         EconomyService economyService = new EconomyService();
         PropertyService propertyService = new PropertyService(data);
-        return new GameService(repository, new DiceService(random), new MoveService(data),
-                turnService, economyService, propertyService, data,
-                new ArrivalService(turnService, economyService, propertyService, data));
+        ArrivalService arrivalService = new ArrivalService(turnService, economyService, propertyService, data);
+        CardService cardService = new CardService(turnService, moveService, economyService, arrivalService);
+        return new GameService(repository, new DiceService(random), moveService,
+                turnService, economyService, propertyService, data, arrivalService, cardService);
     }
 }
