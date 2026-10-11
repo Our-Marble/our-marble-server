@@ -29,6 +29,7 @@ import java.util.*;
  * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
  * 요청 처리 함수는 synchronized로 한 번에 하나씩 처리한다. (같은 요청이 겹치면 상태가 꼬이므로, startGame은 새 방이라 제외)
  * 요청은 roomId를 받지 않고, playerId로 그 플레이어가 속한 진행 중인 게임을 찾는다.
+ * 도착 칸 처리(통행료 정산, 파산)는 ArrivalService가 하고, 이 클래스를 거쳐서만 불린다.
  */
 @Service
 @RequiredArgsConstructor
@@ -43,6 +44,7 @@ public class GameService {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
+    private final ArrivalService arrivalService;
 
     /**
      * 게임 종료 이벤트를 내보내는 곳. 로비가 이 이벤트를 받아 방을 지운다.
@@ -149,7 +151,7 @@ public class GameService {
             state.setDouble(false);
             state.setConsecutiveDoubleCount(0);
             moveService.moveDirectly(player, island.getAsInt());
-            processArrival(state, player);
+            arrivalService.processArrival(state, player);
             save(state);
             return result;
         }
@@ -158,7 +160,7 @@ public class GameService {
         if (move.passedStart()) {
             economyService.paySalary(player, state.getConfig().salaryAmount());
         }
-        processArrival(state, player);
+        arrivalService.processArrival(state, player);
 
         save(state);
         return result;
@@ -356,7 +358,7 @@ public class GameService {
                 new DestinationChosenPayload(playerId, destinationPosition));
 
         moveService.moveDirectly(player, destinationPosition);
-        processArrival(state, player);
+        arrivalService.processArrival(state, player);
 
         save(state);
         return result;
@@ -405,7 +407,7 @@ public class GameService {
                 if (move.passedStart()) {
                     economyService.paySalary(player, state.getConfig().salaryAmount());
                 }
-                processArrival(state, player);
+                arrivalService.processArrival(state, player);
             }
             case "MoveBy" -> moveByCard(state, player, card.steps());
             case "GoToInspection" -> goToIsland(state, player);
@@ -424,7 +426,7 @@ public class GameService {
             int size = moveService.getTileCount();
             moveService.moveDirectly(player, ((player.getPosition() + steps) % size + size) % size);
         }
-        processArrival(state, player);
+        arrivalService.processArrival(state, player);
     }
 
     /** 무인도 카드. 월급 없이 무인도로 가고, 도착 처리에서 영업정지가 시작되고 턴이 넘어간다. */
@@ -435,96 +437,7 @@ public class GameService {
             return;
         }
         moveService.moveDirectly(player, island.getAsInt());
-        processArrival(state, player);
-    }
-
-    // ===== 도착 칸 처리 =====
-
-    private void processArrival(GameState state, PlayerState player) {
-        TileData tile = tileAt(player.getPosition());
-        switch (tile.type()) {
-            case "PROPERTY" -> arriveAtProperty(state, player, tile.propertyId());
-            case "GOLDEN_KEY" -> state.setPhase(TurnPhase.AWAITING_DRAW_CARD);
-            case "START" -> turnService.endTurn(state); //효과 없음(월급은 이동할 때 이미 지급됨)
-            case "CHARITY" -> {
-                economyService.receiveWelfareFund(state, player);
-                turnService.endTurn(state);
-            }
-            case "DONATION" -> {
-                economyService.payTax(state, player, state.getConfig().taxAmount());
-                turnService.endTurn(state);
-            }
-            case "WORLD_TRAVEL" -> turnService.passTurn(state); // 더블이어도 강제로 턴을 넘긴다.
-            case "ISLAND" -> {
-                turnService.imprison(state, player);
-                turnService.passTurn(state); // 강제로 턴을 넘긴다.
-            }
-            default -> turnService.endTurn(state);
-        }
-    }
-
-    private void arriveAtProperty(GameState state, PlayerState player, int propertyId) {
-        PropertyState property = state.getPropertyState(propertyId)
-                .orElseThrow(() -> new IllegalStateException("땅 상태가 없습니다." + propertyId));
-
-        if (!property.hasOwner()) {
-            state.setPhase(TurnPhase.AWAITING_PURCHASE);
-        } else if (property.isOwnedBy(player.getPlayerId())) {
-            state.setPhase(TurnPhase.AWAITING_BUILD);
-        } else {
-            settleToll(state,player,property);
-        }
-    }
-
-    // ===== 통행료 정산 =====
-
-    /**
-     * 남의 땅에 도착했을 때 통행료를 내고, 인수할 수 있는지에 따라 다음 phase를 정한다.
-     * 통행료와 현금 이체는 알림 없이 서버 내부에서만 처리한다. (클라가 같은 규칙으로 계산)
-     * 통행료를 내고도 현금 ≥ 인수가이면 인수 선택을 기다리고, 아니면 턴을 끝낸다.
-     */
-    private void settleToll(GameState state, PlayerState payer, PropertyState property) {
-        long toll = propertyService.getToll(property);
-        if (payer.getMoney() < toll) {
-            long sellable = propertyService.getTotalSellValue(state, payer.getPlayerId());
-            if (payer.getMoney() + sellable >= toll) {
-                state.setPhase(TurnPhase.AWAITING_SELL);
-            } else {
-                declareBankrupt(state, payer, state.getPlayerState(property.getOwnerId()));
-            }
-            return;
-        }
-
-        PlayerState owner = state.getPlayerState(property.getOwnerId());
-        economyService.transfer(payer, owner, toll);
-
-        if (payer.getMoney() >= propertyService.getAcquireValue(property)) {
-            state.setPhase(TurnPhase.AWAITING_ACQUIRE);
-        } else {
-            turnService.endTurn(state);
-        }
-    }
-
-    // ===== 파산 =====
-
-    /**
-     * 통행료를 낼 수 없을 때(전부 팔아도 부족) 파산 처리한다. (클라 HandleBankruptcy와 같은 규칙)
-     * 가진 땅을 모두 매각가로 현금화하고, 현금 전액을 수납자에게 넘기고, 땅은 주인 없음 + 건설 단계 0으로 초기화한다.
-     * 파산은 클라에 알리지 않고 서버 내부에서만 처리한다. 더블이어도 턴은 다음 플레이어로 넘어간다.
-     * 게임이 끝나면(생존자 1명) turnService.passTurn은 아무것도 바꾸지 않는다.
-     */
-    private void declareBankrupt(GameState state, PlayerState payer, PlayerState receiver) {
-        long payerId = payer.getPlayerId();
-        long liquidated = propertyService.getTotalSellValue(state, payerId);
-        state.properties().stream()
-                .filter(property -> property.isOwnedBy(payerId))
-                .forEach(PropertyState::reset);
-
-        economyService.deposit(payer, liquidated);
-        economyService.transfer(payer, receiver, payer.getMoney());
-
-        turnService.eliminate(state, payer);
-        turnService.passTurn(state);
+        arrivalService.processArrival(state, player);
     }
 
     // ===== 게임 종료 =====
