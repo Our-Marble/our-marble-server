@@ -115,4 +115,15 @@ class GameServiceConfigTest {
         assertThat(second.getPlayerState(3L).getMoney()).isEqualTo(GameService.START_MONEY);
         assertThat(first.getConfig()).isNotEqualTo(second.getConfig());
     }
+
+    @Test
+    void 맵_번호가_게임_상태의_설정에_담긴다() {
+        GameService service = newService();
+
+        GameState custom = start(service, GameConfig.defaults().withMapId(3));
+        GameState defaults = service.startGame("r2", List.of(3L, 4L));
+
+        assertThat(custom.getConfig().mapId()).isEqualTo(3);
+        assertThat(defaults.getConfig().mapId()).isEqualTo(GameConfig.DEFAULT_MAP_ID);
+    }
 }

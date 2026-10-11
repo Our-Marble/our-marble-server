@@ -51,4 +51,23 @@ class GameConfigTest {
         assertThatThrownBy(() -> new GameConfig(500_000, 100_000, 100_000, 30, -1))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void 맵_번호를_정하지_않으면_기본_맵이다() {
+        GameConfig config = new GameConfig(1_000_000, 20_000, 50_000, 10, 2);
+
+        assertThat(config.mapId()).isEqualTo(GameConfig.DEFAULT_MAP_ID);
+        assertThat(GameConfig.defaults().mapId()).isEqualTo(GameConfig.DEFAULT_MAP_ID);
+    }
+
+    @Test
+    void 맵_번호를_직접_정하거나_맵_번호만_바꿀_수_있다() {
+        GameConfig custom = new GameConfig(1_000_000, 20_000, 50_000, 10, 2, 3);
+        GameConfig changed = GameConfig.defaults().withMapId(5);
+
+        assertThat(custom.mapId()).isEqualTo(3);
+        assertThat(changed.mapId()).isEqualTo(5);
+        assertThat(changed.startMoney()).isEqualTo(GameConfig.DEFAULT_START_MONEY);   // 나머지는 그대로
+        assertThat(changed.maxRound()).isEqualTo(GameConfig.DEFAULT_MAX_ROUND);
+    }
 }
