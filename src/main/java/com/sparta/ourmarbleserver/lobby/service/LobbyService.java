@@ -22,8 +22,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
  * 규칙에 어긋난 요청은 GameException(ErrorCode.*)을 던지고, 전송 계층이 ERROR로 바꿔 보낸다.
  * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.
- *
- * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 deleteRoom으로 방을 지운다.
+ * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 방을 대기(WAITING) 상태로 되돌린다.
+ * 멤버는 그대로 두고 방장이 아닌 사람의 준비는 푼다.
  * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
  */
 @Service
@@ -200,16 +200,19 @@ public class LobbyService {
     }
 
     /**
-     * 게임이 끝나면(GameEndedEvent) 방을 지운다. 게임 요청을 처리하는 도중에 불리므로 방이 없어도 예외를 던지지 않는다.
+     * 게임이 끝나면(GameEndedEvent) 방을 대기 상태로 되돌려 같은 멤버로 다시 할 수 있게 한다.
+     * 방장은 준비 상태를 유지하고 나머지 준비는 푼다.
+     * 게임 요청을 처리하는 도중에 불리므로 방이 없어도 예외를 던지지 않는다.
      */
     @EventListener
     public synchronized void onGameEnded(GameEndedEvent event) {
-        try {
-            deleteRoom(event.roomId());
-        } catch (GameException ignored) {
-            // 방이 없으면 지울 것이 없다.
-        }
-
+        repository.findById(event.roomId()).ifPresent(room -> {
+            room.setStatus(RoomStatus.WAITING);
+            room.memberIds().stream()
+                    .filter(id -> id != room.getHostId())
+                    .forEach(id -> room.setReady(id, false));
+            repository.save(room);
+        });
     }
 
     // ==== 도우미 ====
