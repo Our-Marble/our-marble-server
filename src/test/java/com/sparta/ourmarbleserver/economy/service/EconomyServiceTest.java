@@ -1,12 +1,10 @@
 package com.sparta.ourmarbleserver.economy.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.sparta.ourmarbleserver.game.state.GameState;
+import com.sparta.ourmarbleserver.game.state.PlayerState;
 import org.junit.jupiter.api.Test;
 
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.state.PlayerState;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class EconomyServiceTest {
 

@@ -1,52 +1,29 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Random;
-import java.util.Set;
-
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** 방별 게임 설정(GameConfig)이 규칙에 적용되는지 확인한다. 설정을 안 넘기면 기본값으로 진행한다. */
 class GameServiceConfigTest {
 
     private static final String ROOM = "r1";
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
 
     private GameService newService(int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        return new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        return GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
     }
 
     private GameState state(String roomId) {

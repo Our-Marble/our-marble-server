@@ -1,17 +1,5 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
@@ -23,8 +11,13 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
 import com.sparta.ourmarbleserver.lobby.dto.RoomPlayer;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 로비 서비스(방 생성·참가·나가기·준비·시작) 테스트. 게임 시작은 호출만 확인한다. */
 class LobbyServiceTest {

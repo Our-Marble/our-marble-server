@@ -1,28 +1,16 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
+import com.sparta.ourmarbleserver.game.state.*;
+import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Queue;
-import java.util.Random;
 import java.util.stream.LongStream;
 
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
-import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.PlayerState;
-import com.sparta.ourmarbleserver.game.state.PropertyState;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
-import com.sparta.ourmarbleserver.property.service.PropertyService;
-
-import tools.jackson.databind.json.JsonMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 게임 종료 테스트: 최종 등수 부여와 종료 이벤트.
@@ -33,29 +21,13 @@ class GameServiceEndTest {
 
     private static final String ROOM = "r1";
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private final List<Object> ended = new ArrayList<>();
 
     private GameService newService(int playerCount, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), new PropertyService(data), data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         service.setEventPublisher(ended::add);
         service.startGame(ROOM, LongStream.rangeClosed(1, playerCount).boxed().toList());
         return service;

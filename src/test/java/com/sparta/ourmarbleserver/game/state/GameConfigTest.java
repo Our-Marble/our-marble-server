@@ -1,9 +1,9 @@
 package com.sparta.ourmarbleserver.game.state;
 
+import org.junit.jupiter.api.Test;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import org.junit.jupiter.api.Test;
 
 /** 게임 설정값(GameConfig) 테스트: 기본값과 값의 범위 검증. */
 class GameConfigTest {

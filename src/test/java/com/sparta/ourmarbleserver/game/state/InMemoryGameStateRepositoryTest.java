@@ -1,10 +1,8 @@
 package com.sparta.ourmarbleserver.game.state;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** 플레이어 번호로 진행 중인 게임 상태를 찾는 기능 테스트. */
 class InMemoryGameStateRepositoryTest {
