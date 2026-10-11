@@ -17,7 +17,7 @@ public class PlayerState {
     /** 무인도 탈출까지 남은 턴 수. */
     private int islandTurnsRemaining;
 
-    private boolean bankrupt;
+    private boolean isBankrupt;
 
     /**
      * 닉네임. 게임 규칙에는 쓰이지 않고, 재접속한 유저에게 현재 상태를 보낼 때 DB를 다시 부르지 않으려고 들고 있는다.
