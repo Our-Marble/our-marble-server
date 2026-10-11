@@ -37,7 +37,9 @@ import java.util.*;
 @RequiredArgsConstructor
 public class GameService {
 
-    /** 초기 자금 */
+    /**
+     * 초기 자금
+     */
     public static final long START_MONEY = GameConfig.DEFAULT_START_MONEY;
     private final GameStateRepository repository;
     private final DiceService diceService;
@@ -55,7 +57,8 @@ public class GameService {
      * GameService가 LobbyService를 직접 알면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 알린다.
      * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 기본값은 아무것도 하지 않는다.
      */
-    private ApplicationEventPublisher eventPublisher = event -> {};
+    private ApplicationEventPublisher eventPublisher = event -> {
+    };
 
     @Autowired
     public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
@@ -64,7 +67,9 @@ public class GameService {
 
     // ===== 게임 시작 (로비가 부른다) =====
 
-    /** 방 상태를 만들고 첫 플레이어의 턴을 시작한다. 닉네임은 빈 문자열이고 봇은 없는 시작이다. */
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. 닉네임은 빈 문자열이고 봇은 없는 시작이다.
+     */
     public GameState startGame(String roomId, List<Long> playerIds) {
         return startGame(roomId, playerIds, Map.of(), Set.of());
     }
@@ -88,14 +93,12 @@ public class GameService {
      * 이 함수를 부른다. 여기에 서비스 락을 걸면 두 락이 서로를 기다려 교착이 생긴다.
      * (같은 방 번호의 동시 시작은 로비의 start가 이미 직렬화한다)
      */
-    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames,
-                               Set<Long> botIds, GameConfig config) {
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
         if (playerIds.size() < GameConfig.MIN_PLAYERS || playerIds.size() > GameConfig.MAX_PLAYERS) {
-            throw new IllegalArgumentException("플레이어는 " + GameConfig.MIN_PLAYERS + "~"
-                    + GameConfig.MAX_PLAYERS + "명이어야 합니다: " + playerIds.size());
+            throw new IllegalArgumentException("플레이어는 " + GameConfig.MIN_PLAYERS + "~" + GameConfig.MAX_PLAYERS + "명이어야 합니다: " + playerIds.size());
         }
         boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
         if (running) {
@@ -138,8 +141,7 @@ public class GameService {
         PlayerState player = state.getPlayerState(playerId);
 
         DiceService.DiceResult dice = diceService.roll(state);
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.DICE_ROLLED,
-                new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.DICE_ROLLED, new DiceRolledPayload(playerId, dice.dice1(), dice.dice2()));
 
         // 무인도 영업정지 중에 더블이 아니면 탈출 실패: 이동 없이 턴이 넘어간다.
         if (turnService.failIslandEscape(player, state.isDouble())) {
@@ -151,7 +153,7 @@ public class GameService {
 
         // 3연속 더블이면 이동하지 않고 무인도로 간다. (월급 없음, 도착 처리에서 영업정지 시작과 턴 넘김)
         OptionalInt island = turnService.findIslandPosition();
-        if(state.getConsecutiveDoubleCount() >= 3 && island.isPresent()) {
+        if (state.getConsecutiveDoubleCount() >= 3 && island.isPresent()) {
             state.setDouble(false);
             state.setConsecutiveDoubleCount(0);
             moveService.moveDirectly(player, island.getAsInt());
@@ -182,8 +184,7 @@ public class GameService {
         PlayerState player = state.getPlayerState(playerId);
         tradeService.purchase(state, player, propertyId, isAccept);
 
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_PURCHASED,
-                new  PropertyPurchasedPayload(playerId, propertyId, isAccept));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_PURCHASED, new PropertyPurchasedPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
@@ -203,8 +204,7 @@ public class GameService {
 
         tradeService.sell(state, payer, propertyIds);
 
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTIES_SOLD,
-                new PropertiesSoldPayload(playerId, propertyIds));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTIES_SOLD, new PropertiesSoldPayload(playerId, propertyIds));
         turnService.endTurn(state);
 
         save(state);
@@ -224,8 +224,7 @@ public class GameService {
 
         tradeService.build(state, player, propertyId, isAccept);
 
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.BUILT,
-                new BuiltPayload(playerId, propertyId, isAccept));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.BUILT, new BuiltPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
@@ -245,8 +244,7 @@ public class GameService {
 
         tradeService.acquire(state, player, propertyId, isAccept);
 
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_ACQUIRED,
-                new PropertyAcquiredPayload(playerId, propertyId, isAccept));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.PROPERTY_ACQUIRED, new PropertyAcquiredPayload(playerId, propertyId, isAccept));
         turnService.endTurn(state);
 
         save(state);
@@ -260,7 +258,7 @@ public class GameService {
      * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 세계여행 칸을 뺀 어디든 고를 수 있다.
      */
     public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
-        GameState state = validate( playerId, TurnPhase.AWAITING_DESTINATION);
+        GameState state = validate(playerId, TurnPhase.AWAITING_DESTINATION);
         PlayerState player = state.getPlayerState(playerId);
 
         if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
@@ -271,8 +269,7 @@ public class GameService {
             throw new GameException(ErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
         }
 
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN,
-                new DestinationChosenPayload(playerId, destinationPosition));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN, new DestinationChosenPayload(playerId, destinationPosition));
 
         moveService.moveDirectly(player, destinationPosition);
         arrivalService.processArrival(state, player);
@@ -287,8 +284,7 @@ public class GameService {
      * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
      * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
      */
-    public synchronized GameResult drawCard(long playerId)
-    {
+    public synchronized GameResult drawCard(long playerId) {
         GameState state = validate(playerId, TurnPhase.AWAITING_DRAW_CARD);
         PlayerState player = state.getPlayerState(playerId);
 
@@ -299,8 +295,7 @@ public class GameService {
             return GameResult.none(state.getRoomId());
         }
         CardData card = cards.get(diceService.randomIndex(cards.size()));
-        GameResult result = GameResult.of(state.getRoomId(), MessageType.CARD_DRAWN,
-                new CardDrawnPayload(playerId, card.id()));
+        GameResult result = GameResult.of(state.getRoomId(), MessageType.CARD_DRAWN, new CardDrawnPayload(playerId, card.id()));
 
         cardService.applyCardEffect(state, player, card);
 
@@ -338,18 +333,13 @@ public class GameService {
      * 새로 부여했으면 true, 이미 정해져 있었으면 false.
      */
     private boolean assignSurvivorRanks(GameState state) {
-        List<PlayerState> survivors = state.players().stream()
-                .filter(player -> !player.isBankrupt())
-                .toList();
+        List<PlayerState> survivors = state.players().stream().filter(player -> !player.isBankrupt()).toList();
         if (survivors.stream().noneMatch(player -> player.getFinalRank() == 0)) {
             return false;
         }
 
         List<PlayerState> ranked = new ArrayList<>(survivors);
-        ranked.sort(Comparator
-                .comparingLong((PlayerState player) -> propertyService.getTotalAsset(state, player.getPlayerId())).reversed()
-                .thenComparing(Comparator.comparingLong(PlayerState::getMoney).reversed())
-                .thenComparingInt(player -> state.playerOrder().indexOf(player.getPlayerId())));
+        ranked.sort(Comparator.comparingLong((PlayerState player) -> propertyService.getTotalAsset(state, player.getPlayerId())).reversed().thenComparing(Comparator.comparingLong(PlayerState::getMoney).reversed()).thenComparingInt(player -> state.playerOrder().indexOf(player.getPlayerId())));
 
         int rank = 1;
         for (PlayerState player : ranked) {
@@ -369,8 +359,7 @@ public class GameService {
      * → 요청이 현재 phase에 맞는지. 상태를 바꾸기 전에 호출하므로 실패해도 상태는 그대로다.
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
-        GameState state = repository.findByPlayerId(playerId)
-                .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
         if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
@@ -385,6 +374,7 @@ public class GameService {
         }
         return state;
     }
+
     private TileData tileAt(int position) {
         return gameDataService.getTiles().get(position);
     }

@@ -18,8 +18,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
-import static io.lettuce.core.ZAggregateArgs.Builder.sum;
-
 /**
  * 땅 거래 규칙: 구매, 건설, 인수, 매각. 규칙에 어긋나면 GameException을 던지고, 던지기 전에는 상태를 바꾸지 않는다.
  * 공통 검증(내 차례, phase), 턴 종료, 저장, 알림, 요청 락은 GameService가 한다.
@@ -27,7 +25,7 @@ import static io.lettuce.core.ZAggregateArgs.Builder.sum;
  */
 @Service
 @RequiredArgsConstructor
-public class PropertyTradeService {
+class PropertyTradeService {
     private final EconomyService economyService;
     private final PropertyService propertyService;
     private final GameDataService gameDataService;
@@ -63,7 +61,7 @@ public class PropertyTradeService {
     void build(GameState state, PlayerState player, int propertyId, boolean isAccept) {
         requireStandingOn(player, propertyId);
         if (!isAccept) {
-        return;
+            return;
         }
 
         PropertyState property = state.getPropertyState(propertyId).orElseThrow();
@@ -71,7 +69,7 @@ public class PropertyTradeService {
             throw new GameException(ErrorCode.NOT_OWNER);
         }
         if (!propertyService.canBuild(propertyId)) {
-        throw new GameException(ErrorCode.CANNOT_BUILD);
+            throw new GameException(ErrorCode.CANNOT_BUILD);
         }
         if (property.getBuildingLevel() == BuildingLevel.HOTEL) {
             throw new GameException(ErrorCode.MAX_LEVEL);
@@ -117,8 +115,8 @@ public class PropertyTradeService {
      */
     void sell(GameState state, PlayerState payer, List<Integer> propertyIds) {
         if (propertyIds == null || propertyIds.isEmpty()
-            || propertyIds.stream().anyMatch(Objects::isNull)
-            || new HashSet<>(propertyIds).size() != propertyIds.size()) {
+                || propertyIds.stream().anyMatch(Objects::isNull)
+                || new HashSet<>(propertyIds).size() != propertyIds.size()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
         }
         List<PropertyState> selected = new ArrayList<>();
@@ -126,15 +124,15 @@ public class PropertyTradeService {
             PropertyState property = state.getPropertyState(propertyId)
                     .orElseThrow(() -> new GameException(ErrorCode.INVALID_PROPERTY));
             if (!property.isOwnedBy(payer.getPlayerId())) {
-                throw new GameException(ErrorCode. NOT_OWNER);
+                throw new GameException(ErrorCode.NOT_OWNER);
             }
             selected.add(property);
         }
 
-        PropertyState tollProperty = findTollProperty(state,payer);
+        PropertyState tollProperty = findTollProperty(state, payer);
         long toll = propertyService.getToll(tollProperty);
-        long proceeds =selected.stream().mapToLong(propertyService::getSellValue).sum();
-        if(payer.getMoney() + proceeds <toll) {
+        long proceeds = selected.stream().mapToLong(propertyService::getSellValue).sum();
+        if (payer.getMoney() + proceeds < toll) {
             throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
         }
 
@@ -144,7 +142,9 @@ public class PropertyTradeService {
         economyService.transfer(payer, state.getPlayerState(tollProperty.getOwnerId()), toll);
     }
 
-    /** 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다. */
+    /**
+     * 매각 대기 중인 플레이어가 통행료를 내야 하는 땅(내 말이 서 있는 남의 땅)을 찾는다. 아니면 상태 오류다.
+     */
     private PropertyState findTollProperty(GameState state, PlayerState payer) {
         TileData tile = tileAt(payer.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
@@ -158,13 +158,16 @@ public class PropertyTradeService {
         return property;
     }
 
-    /** 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다. */
+    /**
+     * 내 말이 요청한 땅 위에 서 있는지 확인한다. 아니면 올바르지 않은 땅으로 거부한다.
+     */
     private void requireStandingOn(PlayerState player, int propertyId) {
         TileData tile = tileAt(player.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
     }
+
     private TileData tileAt(int position) {
         return gameDataService.getTiles().get(position);
     }
