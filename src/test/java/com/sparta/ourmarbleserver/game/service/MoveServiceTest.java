@@ -1,14 +1,12 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.game.service.MoveService.MoveResult;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
-
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class MoveServiceTest {
 

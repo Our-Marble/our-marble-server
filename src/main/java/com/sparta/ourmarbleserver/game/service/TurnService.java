@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.game.service;
 
 import com.sparta.ourmarbleserver.game.dto.TileData;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
@@ -18,9 +19,9 @@ import java.util.OptionalInt;
 @RequiredArgsConstructor
 public class TurnService {
     /** 최대 라운드. 이 라운드를 넘기면 게임이 끝난다. */
-    public static final int MAX_ROUND = 30;
+    public static final int MAX_ROUND = GameConfig.DEFAULT_MAX_ROUND;
     /** 무인도 영업정지 턴 수 */
-    public static final int ISLAND_TURNS = 3;
+    public static final int ISLAND_TURNS = GameConfig.DEFAULT_ISLAND_TURNS;
     public static final String ISLAND = "ISLAND";
     private static final String WORLD_TRAVEL = "WORLD_TRAVEL";
 
@@ -54,7 +55,7 @@ public class TurnService {
             return;
         }
         int nextRound = getNextRound(state, playerId);
-        if(nextRound > MAX_ROUND) {
+        if(nextRound > state.getConfig().maxRound()) {
             state.setGameOver(true);
             return;
         }
@@ -143,10 +144,10 @@ public class TurnService {
         }
     }
 
-    /** 무인도에 도착하면 영업정지가 시작된다. */
-    public void imprison(PlayerState player) {
-        player.setIslandTurnsRemaining(ISLAND_TURNS);
-    }
+    /** 무인도에 도착하면 영업정지가 시작된다. 턴 수는 게임 설정을 따른다. */
+    public void imprison(GameState state, PlayerState player) {
+        player.setIslandTurnsRemaining(state.getConfig().islandTurns());
+    };
 
     /** 다음 차례가 몇 라운드인지. 턴 순서가 처음으로 돌아오면 1 늘어난다. (첫 턴은 1라운드) */
     int getNextRound(GameState state, long nextPlayerId) {

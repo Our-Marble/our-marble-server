@@ -1,16 +1,5 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
-
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.DestinationChosenPayload;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
@@ -21,8 +10,13 @@ import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 세계여행(CHOOSE_DESTINATION) 테스트. 세계여행 칸은 24번이다. */
 class GameServiceWorldTravelTest {
@@ -30,21 +24,6 @@ class GameServiceWorldTravelTest {
     private static final String ROOM = "r1";
     private static final int WORLD_TRAVEL_TILE = 24;
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private final JsonMapper mapper = JsonMapper.builder().build();
@@ -53,8 +32,7 @@ class GameServiceWorldTravelTest {
     private GameService newService(int... faces) {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         service.startGame(ROOM, List.of(1L, 2L));
         return service;
     }
@@ -170,6 +148,28 @@ class GameServiceWorldTravelTest {
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
+    }
+
+    @Test
+    void 세계여행_칸을_목적지로_고르면_거부되고_상태가_바뀌지_않는다() {
+        GameService service = newServiceChoosing();
+
+        assertRejected(() -> service.chooseDestination(1L, WORLD_TRAVEL_TILE), ErrorCode.INVALID_PROPERTY);
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void 무인도_칸은_목적지로_고를_수_있다() {
+        GameService service = newServiceChoosing();
+
+        service.chooseDestination(1L, 8);   // 무인도
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(8);
+        assertThat(state().getPlayerState(1L).getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(2L);
     }
 
     @Test

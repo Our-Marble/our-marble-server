@@ -1,26 +1,16 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.ArrayDeque;
-import java.util.List;
-import java.util.Queue;
-import java.util.Random;
-
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.PropertyState;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 남의 땅 도착 시 통행료 정산 테스트.
@@ -31,21 +21,6 @@ class GameServiceTollTest {
     private static final String ROOM = "r1";
     private static final int PROPERTY_ID = 103;
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private PropertyService propertyService;
@@ -53,8 +28,7 @@ class GameServiceTollTest {
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(1, 2)),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(1, 2));
         service.startGame(ROOM, List.of(1L, 2L));
         property().setOwnerId(2L);
         return service;

@@ -1,10 +1,8 @@
 package com.sparta.ourmarbleserver.game.state;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /** 플레이어 번호로 진행 중인 게임 상태를 찾는 기능 테스트. */
 class InMemoryGameStateRepositoryTest {
@@ -61,5 +59,23 @@ class InMemoryGameStateRepositoryTest {
         repository.deleteById("r1");
 
         assertThat(repository.findByPlayerId(1L)).isEmpty();
+    }
+
+    @Test
+    void 파산한_플레이어는_찾지_않고_남은_플레이어는_찾는다() {
+        GameState state = game("r1", 1L, 2L, 3L);
+        state.getPlayerState(1L).setBankrupt(true);
+
+        assertThat(repository.findByPlayerId(1L)).isEmpty();
+        assertThat(repository.findByPlayerId(2L)).get().extracting(GameState::getRoomId).isEqualTo("r1");
+    }
+
+    @Test
+    void 한_게임에서_파산한_플레이어가_새_게임에_있으면_새_게임을_찾는다() {
+        GameState old = game("r1", 1L, 2L, 3L);
+        old.getPlayerState(1L).setBankrupt(true);
+        game("r2", 1L, 4L);
+
+        assertThat(repository.findByPlayerId(1L)).get().extracting(GameState::getRoomId).isEqualTo("r2");
     }
 }

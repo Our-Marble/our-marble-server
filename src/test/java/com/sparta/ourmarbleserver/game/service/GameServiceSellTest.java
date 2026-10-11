@@ -1,27 +1,22 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.PropertyState;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 매각(SELL_PROPERTIES) 테스트.
@@ -39,8 +34,7 @@ class GameServiceSellTest {
     private GameService newService() {
         GameDataService data = new GameDataService(mapper);
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data);
         service.startGame(ROOM, List.of(1L, 2L));
 
         GameState state = state();
@@ -152,6 +146,29 @@ class GameServiceSellTest {
 
         assertRejected(() -> service.sellProperties(1L, List.of(101, 101)), ErrorCode.INVALID_PROPERTY_LIST);
         assertThat(property(101).isOwnedBy(1L)).isTrue();
+    }
+
+    @Test
+    void 목록이_null이면_거부된다() {
+        GameService service = newService();
+
+        assertRejected(() -> service.sellProperties(1L, null), ErrorCode.INVALID_PROPERTY_LIST);
+
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_SELL);
+        assertThat(property(101).isOwnedBy(1L)).isTrue();
+    }
+
+    @Test
+    void 목록에_null_값이_있으면_거부된다() {
+        GameService service = newService();
+        List<Integer> withNull = new ArrayList<>();
+        withNull.add(101);
+        withNull.add(null);
+
+        assertRejected(() -> service.sellProperties(1L, withNull), ErrorCode.INVALID_PROPERTY_LIST);
+
+        assertThat(property(101).isOwnedBy(1L)).isTrue();
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
     }
 
     @Test

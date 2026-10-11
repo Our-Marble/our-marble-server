@@ -1,29 +1,19 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayDeque;
-import java.util.Queue;
-import java.util.Random;
-import java.util.stream.LongStream;
-
-import org.junit.jupiter.api.Test;
-
-import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
-import com.sparta.ourmarbleserver.game.state.GameState;
-import com.sparta.ourmarbleserver.game.state.GameStateRepository;
-import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
-import com.sparta.ourmarbleserver.game.state.PropertyState;
-import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.stream.LongStream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 파산 테스트. 플레이어 1이 주사위로 남의 땅에 도착했는데 전부 팔아도 통행료에 못 미치는 상태에서 시작한다.
@@ -34,21 +24,6 @@ class GameServiceBankruptTest {
 
     private static final String ROOM = "r1";
 
-    /** 정해 둔 주사위 눈(1~6)을 순서대로 돌려주는 Random */
-    private static class FixedRandom extends Random {
-        private final Queue<Integer> faces = new ArrayDeque<>();
-
-        FixedRandom(int... values) {
-            for (int v : values) {
-                faces.add(v);
-            }
-        }
-
-        @Override
-        public int nextInt(int bound) {
-            return faces.remove() - 1;
-        }
-    }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private PropertyService propertyService;
@@ -56,8 +31,7 @@ class GameServiceBankruptTest {
     private GameService newService(int playerCount, int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
-        GameService service = new GameService(repository, new DiceService(new FixedRandom(faces)),
-                new MoveService(data), new TurnService(data), new EconomyService(), propertyService, data);
+        GameService service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         service.startGame(ROOM, LongStream.rangeClosed(1, playerCount).boxed().toList());
 
         property(103).setOwnerId(2L);
@@ -155,12 +129,12 @@ class GameServiceBankruptTest {
     }
 
     @Test
-    void 파산한_플레이어가_다시_요청하면_거부된다() {
+    void 파산한_플레이어가_다시_요청하면_속한_게임이_없어서_거부된다() {
         GameService service = newService(3, 1, 2);
         service.rollDice(1L);
 
         assertThatThrownBy(() -> service.rollDice(1L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
+                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
     }
 }

@@ -1,17 +1,5 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
@@ -24,8 +12,16 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
 import com.sparta.ourmarbleserver.lobby.dto.RoomPlayer;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
-
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.*;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /** 로비 서비스(방 생성·참가·나가기·준비·시작) 테스트. 게임 시작은 호출만 확인한다. */
 class LobbyServiceTest {
@@ -36,8 +32,12 @@ class LobbyServiceTest {
     private static final long P4 = 4L;
     private static final int MAP = 1;
 
-    /** startGame 호출만 기록하는 GameService. 실제 게임 상태는 만들지 않는다. */
-    private static class RecordingGameService extends GameService {
+    /**
+     * startGame 호출만 기록하는 GameService 대역. 실제 게임 상태는 만들지 않는다.
+     * GameService를 상속하지 않고 Mockito로 만들어서, GameService의 생성자 인자가 바뀌어도 이 테스트는 안 깨진다.
+     */
+    private static class RecordingGameService {
+        final GameService mock = mock(GameService.class);
         int callCount;
         String roomId;
         List<Long> playerIds;
@@ -46,21 +46,17 @@ class LobbyServiceTest {
         boolean fail;
 
         RecordingGameService() {
-            super( null, null, null, null, null, null,
-                    new GameDataService(JsonMapper.builder().build()));
-        }
-
-        @Override
-        public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds) {
-            if (fail) {
-                throw new IllegalStateException("시작 실패");
-            }
-            this.callCount++;
-            this.roomId = roomId;
-            this.playerIds = new ArrayList<>(playerIds);
-            this.nicknames = new HashMap<>(nicknames);
-            this.botIds = new HashSet<>(botIds);
-            return null;
+            when(mock.startGame(anyString(), anyList(), anyMap(), anySet())).thenAnswer(invocation -> {
+                if (fail) {
+                    throw new IllegalStateException("시작 실패");
+                }
+                callCount++;
+                roomId = invocation.getArgument(0);
+                playerIds = new ArrayList<>(invocation.<List<Long>>getArgument(1));
+                nicknames = new HashMap<>(invocation.<Map<Long, String>>getArgument(2));
+                botIds = new HashSet<>(invocation.<Set<Long>>getArgument(3));
+                return null;
+            });
         }
     }
 
@@ -78,7 +74,7 @@ class LobbyServiceTest {
 
     private final RecordingGameService gameService = new RecordingGameService();
     private final LobbyService service =
-            new LobbyService(new InMemoryRoomRepository(), gameService, new FakePlayerService());
+            new LobbyService(new InMemoryRoomRepository(), gameService.mock, new FakePlayerService());
 
     private static void assertError(ErrorCode code, Runnable action) {
         assertThatThrownBy(action::run)

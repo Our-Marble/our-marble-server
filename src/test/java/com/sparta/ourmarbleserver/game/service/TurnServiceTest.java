@@ -1,17 +1,15 @@
 package com.sparta.ourmarbleserver.game.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
-
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class TurnServiceTest {
 
@@ -79,7 +77,7 @@ class TurnServiceTest {
         service.startTurn(state, 1L);
         state.setDouble(true);
         state.setConsecutiveDoubleCount(2);
-        state.setPhase(TurnPhase.TURN_END);
+        state.setPhase(TurnPhase.AWAITING_PURCHASE);
 
         service.endTurn(state);
 
@@ -239,7 +237,7 @@ class TurnServiceTest {
     void 무인도에_갇히면_영업정지_3턴이_시작된다() {
         PlayerState player = state.getPlayerState(1L);
 
-        service.imprison(player);
+        service.imprison(state, player);
 
         assertThat(player.getIslandTurnsRemaining()).isEqualTo(TurnService.ISLAND_TURNS);
     }
