@@ -1,51 +1,34 @@
 package com.sparta.ourmarbleserver.global.websocket;
 
-import com.sparta.ourmarbleserver.game.dto.GameMessage;
+import com.sparta.ourmarbleserver.global.protocol.MessageType;
+import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRelay;
-import com.sparta.ourmarbleserver.global.transport.OutboundMessage;
 import com.sparta.ourmarbleserver.global.transport.PlayerUnicaster;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
 
+/**
+ * 서버에서 클라이언트로 나가는 모든 메시지의 출구.
+ * 무엇을(type, payload) 누구에게(한 명 / 방 전체) 보낼지만 받고, JSON 변환과 실제 전달은 아래에 맡긴다.
+ *
+ * 한 명   → PlayerUnicaster
+ * 방 전체 → MessageRelay → RoomBroadcaster
+ */
 @Component
 @RequiredArgsConstructor
 public class WebSocketMessageSender {
 
+    private final MessageCodec codec;
     private final PlayerUnicaster playerUnicaster;
     private final MessageRelay messageRelay;
-    private final ObjectMapper objectMapper;
 
-
-    /*
-    * GameMessage 클래스가 이름이 Game이 붙어있어서 Lobby쪽에선 못씀... Object 타입르로 받자니 내용물을 꺼내볼수가없음. 그래서 일단 게임용 메서드들과 로비용 메서드들 구분해둠.
-    */
-
-    // 게임용
-    public void sendToPlayer(long playerId, GameMessage message)
-    {
-        OutboundMessage outboundMessage = new OutboundMessage(message.type(), message.payload());
-        String jsonMessage = objectMapper.writeValueAsString(outboundMessage);
-
-        playerUnicaster.sendToPlayer(playerId, jsonMessage);
+    // 한 명에게 (응답, ERROR, CONNECTED 등)
+    public void sendToPlayer(long playerId, MessageType type, Object payload) {
+        playerUnicaster.sendToPlayer(playerId, codec.encode(type, payload));
     }
 
-    public void publishToRoom(String roomId, GameMessage message)
-    {
-        OutboundMessage outboundMessage = new OutboundMessage(message.type(), message.payload());
-        String jsonMessage = objectMapper.writeValueAsString(outboundMessage);
-
-        messageRelay.publish(roomId, jsonMessage);
-    }
-
-    // 로비용
-    public void sendToPlayer()
-    {
-
-    }
-
-    public void publishToRoom()
-    {
-
+    // 방에 있는 모두에게
+    public void sendToRoom(String roomId, MessageType type, Object payload) {
+        messageRelay.publish(roomId, codec.encode(type, payload));
     }
 }

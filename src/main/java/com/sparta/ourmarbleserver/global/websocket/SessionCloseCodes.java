@@ -8,5 +8,5 @@ import org.springframework.web.socket.CloseStatus;
  */
 public final class SessionCloseCodes {
     public static final CloseStatus DUPLICATE_LOGIN = new CloseStatus(4001, "DUPLICATE_LOGIN");
-    private SessionCloseCodes() {}   // 객체 생성 막기 (TopicPath와 같은 모양)
+    private SessionCloseCodes() {}   // 객체 생성 막기
 }

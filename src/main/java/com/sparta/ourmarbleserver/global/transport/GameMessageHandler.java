@@ -72,7 +72,7 @@ public class GameMessageHandler implements WsMessageHandler{
         String roomId = gameResult.roomId();
         for(GameMessage gameMessage : gameResult.messages())
         {
-            webSocketMessageSender.publishToRoom(roomId, gameMessage);
+            webSocketMessageSender.sendToRoom(roomId, gameMessage.type(), gameMessage.payload());
         }
     }
 }
