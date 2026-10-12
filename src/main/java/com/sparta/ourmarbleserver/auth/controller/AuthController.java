@@ -1,11 +1,14 @@
 package com.sparta.ourmarbleserver.auth.controller;
 
 import com.sparta.ourmarbleserver.auth.dto.AccessTokenResponse;
+import com.sparta.ourmarbleserver.auth.dto.EmailSendRequest;
+import com.sparta.ourmarbleserver.auth.dto.EmailVerifyRequest;
 import com.sparta.ourmarbleserver.auth.dto.LoginRequest;
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.dto.SignupRequest;
+import com.sparta.ourmarbleserver.auth.service.EmailVerificationService;
 import com.sparta.ourmarbleserver.auth.service.JwtAuthService;
-import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.auth.service.SignupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,7 +33,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequiredArgsConstructor
 public class AuthController {
     private final JwtAuthService jwtAuthService;
-    private final PlayerService playerService;
+    private final SignupService signupService;
+    private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 가입한다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "201", description = "가입 성공. 만들어진 회원 정보를 돌려준다.")
@@ -39,8 +43,36 @@ public class AuthController {
     public ResponseEntity<PlayerResponse> signup(
             @Valid @RequestBody SignupRequest body
     ) {
-        PlayerResponse player = playerService.signup(body);
+        //이메일 인증을 포함한 회원가입 이메일 인증 없이 진행하고 싶으면 이 코드를 주석치고 아래 주석을 해제
+        PlayerResponse player = signupService.signup(body);
+
+        //이메일 인증 미포함 회원가입
+        //PlayerResponse player = playerService.signup(body);
+
         return ResponseEntity.status(HttpStatus.CREATED).body(player);
+    }
+
+    @Operation(summary = "이메일 인증번호 발송", description = "입력한 이메일로 6자리 인증번호를 발송한다. 인증번호는 5분 동안 유효하다. 로그인 없이 호출할 수 있다.")
+    @ApiResponse(responseCode = "204", description = "인증번호 발송 성공 (본문 없음)")
+    @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나 이메일이 비어 있음")
+    @ApiResponse(responseCode = "502", description = "메일 서버를 통한 발송 실패")
+    @PostMapping("/email/send")
+    public ResponseEntity<Void> emailSend(
+            @Valid @RequestBody EmailSendRequest request
+    ) {
+        emailVerificationService.sendCode(request.getEmail());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "이메일 인증번호 확인", description = "이메일로 받은 6자리 인증번호를 확인한다. 성공하면 해당 이메일은 30분 동안 회원가입할 수 있다. 로그인 없이 호출할 수 있다.")
+    @ApiResponse(responseCode = "204", description = "이메일 인증 성공 (본문 없음)")
+    @ApiResponse(responseCode = "400", description = "인증번호가 틀렸거나, 없거나, 만료됨")
+    @PostMapping("/email/verify")
+    public ResponseEntity<Void> emailVerify(
+            @Valid @RequestBody EmailVerifyRequest request
+    ) {
+        emailVerificationService.verifyCode(request.getEmail(), request.getCode());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "로그인", description = "이메일과 비밀번호가 맞으면 accessToken(JWT)을 돌려준다. 로그인 없이 호출할 수 있다.")
