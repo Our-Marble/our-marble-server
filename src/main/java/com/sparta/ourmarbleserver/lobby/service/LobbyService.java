@@ -9,6 +9,7 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
 import com.sparta.ourmarbleserver.lobby.dto.RoomPlayer;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
+import com.sparta.ourmarbleserver.lobby.dto.RoomUpdatedPayload;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,14 @@ public class LobbyService {
     // ==== 방 만들기 / 조회 ====
 
     /**
+     * 방을 만든다. 인원수는 게임 최대 인원(GameConfig.MAX_PLAYERS)으로 정한다.
+     * (CREATE_ROOM 명세에는 mapId만 있다)
+     */
+    public synchronized RoomInfo createRoom(long playerId, int mapId) {
+        return createRoom(playerId, mapId, GameConfig.MAX_PLAYERS);
+    }
+
+    /**
      * 방을 만든다. 만든 사람이 방장이고 자동으로 참가한다.
      * maxPlayers가 2~4가 아니면 INVALID_STATE, 이미 어떤 방에든(시작한 방 포함) 있으면 ALREADY_IN_ROOM.
      * mapId는 검증하지 않는다. (맵 목록이 서버에 없다)
@@ -51,6 +60,7 @@ public class LobbyService {
 
         Room room = new Room("r_" + roomSequence.incrementAndGet(), playerId, mapId, maxPlayers);
         room.addMember(playerId, true);
+        room.setNickname(playerId, nicknameOf(playerId));
         repository.save(room);
         return toInfo(room);
     }
@@ -71,7 +81,7 @@ public class LobbyService {
     /**
      * 이 플레이어가 들어 있는 방을 찾는다. 어느 방에도 없으면 NOT_IN_ROOM.
      * 요청에는 roomId가 실리지 않아서(LEAVE_ROOM, START_GAME) 요청한 사람의 방을 이걸로 찾는다.
-     * 한 플레이어는 방 하나에만 들어갈 수 있다. (시작한 방 포함)s
+     * 한 플레이어는 방 하나에만 들어갈 수 있다. (시작한 방 포함)
      */
     public synchronized RoomInfo findRoomByPlayer(long playerId) {
         return repository.findAll().stream()
@@ -98,6 +108,7 @@ public class LobbyService {
         }
 
         room.addMember(playerId, false);
+        room.setNickname(playerId, nicknameOf(playerId));
         repository.save(room);
         return toInfo(room);
     }
@@ -127,6 +138,22 @@ public class LobbyService {
         }
         repository.save(room);
     }
+
+    // ==== ROOM_UPDATED 내용 ====
+
+    /**
+     * ROOM_UPDATED 알림 내용을 만든다. 방 상태와 참가자 닉네임을 담는다. 없는 방이면 ROOM_NOT_FOUND.
+     * 알림을 보내는 쪽이 입장, 퇴장, 준비, 방장 변경 뒤에 부른다.
+     */
+    public synchronized RoomUpdatedPayload roomUpdated(String roomId) {
+        Room room = findRoom(roomId);
+        List<RoomUpdatedPayload.PlayerSnapshot> players = room.memberIds().stream()
+                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
+                .toList();
+        return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
+                room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(), players));
+    }
+
 
     // ==== 준비 / 시작 ====
 
@@ -190,7 +217,7 @@ public class LobbyService {
     // ==== 방 삭제 ====
 
     /**
-     * 방을 지운다. 게임이 끝났을 때 게임 쪽에서 부른다. 시작한 방(PLAYING)도 지운다.
+     * 방을 지운다. 시작한 방(PLAYING)도 지운다.
      * 없는 방이면 ROOM_NOT_FOUND.
      */
     public synchronized void deleteRoom(String roomId) {
@@ -219,6 +246,12 @@ public class LobbyService {
     private Room findRoom(String roomId) {
         return repository.findById(roomId)
                 .orElseThrow(() -> new GameException(ErrorCode.ROOM_NOT_FOUND));
+    }
+
+    /** PlayerService에서 닉네임을 읽는다. 없으면 빈 문자열. */
+    private String nicknameOf(long playerId) {
+        String nickname = playerService.findMe(playerId).getNickname();
+        return nickname == null ? "" : nickname;
     }
 
     /** 이 플레이어가 이미 들어가 있는 방이 있으면(시작한 방 포함) 거부한다. */

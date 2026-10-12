@@ -5,10 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 방 하나의 상태. 참가 순서를 지키며 참가자별 준비 여부를 가진다.
@@ -29,6 +26,10 @@ public class Room {
     /** 참가 순서를 지키는 playerId → 준비 여부. 바깥에서 마음대로 고치지 못하게 getter를 만들지 않는다. */
     @Getter(AccessLevel.NONE)
     private final Map<Long, Boolean> members = new LinkedHashMap<>();
+
+    /** playerId → 닉네임. 입장할 때 한 번 읽어서 방에 저장해 두고, ROOM_UPDATED를 만들 때 쓴다. */
+    @Getter(AccessLevel.NONE)
+    private final Map<Long, String> nicknames = new HashMap<>();
 
     public Room(String roomId, long hostId, int mapId, int maxPlayers) {
         this.roomId = roomId;
@@ -58,7 +59,18 @@ public class Room {
     }
 
     public void removeMember(long playerId) {
+
         members.remove(playerId);
+        nicknames.remove(playerId);
+    }
+
+    public void setNickname(long playerId, String nickname) {
+        nicknames.put(playerId, nickname);
+    }
+
+    /** 저장된 닉네임. 없으면 빈 문자열. */
+    public String nicknameOf(long playerId) {
+        return nicknames.getOrDefault(playerId, "");
     }
 
     public boolean isReady(long playerId) {

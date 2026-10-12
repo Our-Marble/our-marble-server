@@ -5,12 +5,14 @@ import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
 import com.sparta.ourmarbleserver.lobby.dto.RoomPlayer;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
+import com.sparta.ourmarbleserver.lobby.dto.RoomUpdatedPayload;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -502,5 +504,58 @@ class LobbyServiceTest {
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
         return room;
+    }
+
+    // ===== 인원수 없이 방 만들기 (CREATE_ROOM 명세) =====
+
+    @Test
+    void 인원수를_안_주면_최대_인원으로_방을_만든다() {
+        RoomInfo room = service.createRoom(HOST, MAP);
+
+        assertThat(room.maxPlayers()).isEqualTo(GameConfig.MAX_PLAYERS);
+        assertThat(room.hostId()).isEqualTo(HOST);
+    }
+
+    // ===== ROOM_UPDATED 내용 =====
+
+    @Test
+    void ROOM_UPDATED에_방_상태와_참가자_닉네임이_담긴다() {
+        RoomInfo room = roomWithTwo();
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+
+        assertThat(snapshot.roomId()).isEqualTo(room.roomId());
+        assertThat(snapshot.hostId()).isEqualTo(HOST);
+        assertThat(snapshot.mapId()).isEqualTo(MAP);
+        assertThat(snapshot.status()).isEqualTo(RoomStatus.WAITING);
+        assertThat(snapshot.players()).containsExactly(
+                new RoomUpdatedPayload.PlayerSnapshot(HOST, "닉1", true),
+                new RoomUpdatedPayload.PlayerSnapshot(P2, "닉2", false));
+    }
+
+    @Test
+    void 나간_사람은_ROOM_UPDATED에서_빠진다() {
+        RoomInfo room = roomWithTwo();
+
+        service.leave(room.roomId(), P2);
+
+        assertThat(service.roomUpdated(room.roomId()).room().players())
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::playerId).containsExactly(HOST);
+    }
+
+    @Test
+    void 방장이_나가면_ROOM_UPDATED의_방장이_바뀐다() {
+        RoomInfo room = roomWithTwo();
+
+        service.leave(room.roomId(), HOST);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.hostId()).isEqualTo(P2);
+        assertThat(snapshot.players()).containsExactly(new RoomUpdatedPayload.PlayerSnapshot(P2, "닉2", true));
+    }
+
+    @Test
+    void 없는_방의_ROOM_UPDATED는_ROOM_NOT_FOUND() {
+        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.roomUpdated("r_없음"));
     }
 }
