@@ -35,7 +35,7 @@ import io.swagger.v3.oas.models.Paths;
 @Tag(name = "게임 알림", description = "서버가 WebSocket으로 방 전원에게 보내는 게임 알림")
 @RestController
 @RequestMapping("/docs/notifications")
-public class MessageDocController {
+public class GameMessageDocController {
 
     @Operation(summary = "건설", description = "요청 BUILD → 알림 BUILT. 건설 결과. 거절이면 isAccept=false [예시 JSON 열기](/docs/notifications/built)")
     @ApiResponse(responseCode = "200", description = "payload",

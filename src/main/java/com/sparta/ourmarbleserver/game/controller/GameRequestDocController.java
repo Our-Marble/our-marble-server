@@ -22,7 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "게임 요청", description = "클라이언트가 WebSocket으로 서버에 보내는 게임 요청")
 @RestController
 @RequestMapping("/docs/requests")
-public class RequestDocController {
+public class GameRequestDocController {
 
     private static final String NO_RESPONSE =
             "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 ERROR가 요청자에게만 간다.";
