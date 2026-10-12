@@ -303,6 +303,18 @@ public class GameService {
         return result;
     }
 
+    // ===== 상태 동기화 (재접속) =====
+
+    /**
+     * 플레이어가 속한 진행 중인 게임의 현재 상태 전체를 GAME_STATE_SYNC 알림으로 만든다. (재접속 때 화면 복구용)
+     * 상태를 바꾸지 않는다. 요청 처리와 같은 락을 잡아서, 요청이 처리되는 도중의 상태를 읽지 않는다.
+     * 속한 진행 중인 게임이 없으면(로비에 있는 사람 등) 빈 값을 돌려준다.
+     */
+    public synchronized Optional<GameMessage> syncState(long playerId) {
+        return repository.findByPlayerId(playerId)
+                .map(state -> new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state)));
+    }
+
     // ===== 게임 종료 =====
 
     /**
