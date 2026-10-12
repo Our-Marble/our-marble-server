@@ -13,6 +13,7 @@ import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
+import com.sparta.ourmarbleserver.scheduler.service.TimerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -63,6 +64,17 @@ public class GameService {
     @Autowired
     public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * 타이머. 상태를 저장하는 때마다(startGame, save) 그 방의 타이머를 새로 시작하고, 게임이 끝나면 지운다.
+     * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 테스트에서는 넣지 않으면 타이머 없이 동작한다.
+     */
+    private TimerService timerService;
+
+    @Autowired
+    public void setTimerService(TimerService timerService) {
+        this.timerService = timerService;
     }
 
     // ===== 게임 시작 (로비가 부른다) =====
@@ -126,6 +138,7 @@ public class GameService {
 
         turnService.startTurn(state, playerIds.getFirst());
         repository.save(state);
+        restartTimer(state);
         return state;
     }
 
@@ -315,18 +328,36 @@ public class GameService {
                 .map(state -> new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state)));
     }
 
-    // ===== 게임 종료 =====
+    // ===== 상태 저장과 게임 종료 =====
 
     /**
-     * 요청 처리의 마지막에 상태를 저장한다. 게임이 끝났으면 생존자의 최종 등수를 정하고 종료 이벤트를 한 번 내보낸다.
+     * 요청 처리의 마지막에 상태를 저장하고, 타이머를 새로 시작한다. (게임이 끝났으면 타이머를 지운다)
+     * 게임이 끝났으면 생존자의 최종 등수를 정하고 종료 이벤트를 한 번 내보낸다.
      * (등수가 아직 안 정해진 생존자가 있을 때만 정하므로, 이벤트도 한 번만 나간다)
      */
     private void save(GameState state) {
         boolean justEnded = state.isGameOver() && assignSurvivorRanks(state);
         repository.save(state);
+        restartTimer(state);
         if (justEnded) {
             eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
         }
+    }
+
+    /**
+     * 상태가 저장된 시점에 타이머를 새로 시작한다. (이 시점에 다음에 기다릴 phase가 정해져 있다)
+     * 게임이 끝났으면 타이머를 지운다. 타이머는 예약만 하고 이 서비스를 다시 부르지 않는다.
+     */
+    private void restartTimer(GameState state) {
+        if (timerService == null) {
+            return;
+        }
+        if (state.isGameOver()) {
+            timerService.cancel(state.getRoomId());
+            return;
+        }
+        timerService.start(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
+                state.getPhase(), state.getConfig().limitTimeSeconds());
     }
 
     /**
