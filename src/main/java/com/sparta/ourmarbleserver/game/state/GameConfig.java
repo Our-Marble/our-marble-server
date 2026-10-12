@@ -11,8 +11,10 @@ package com.sparta.ourmarbleserver.game.state;
  * @param maxRound     최대 라운드. 이 라운드를 넘기면 게임이 끝난다.
  * @param islandTurns  무인도 영업정지 턴 수
  * @param mapId        맵 번호. 방장이 로비에서 고른 맵이다. 맵 목록이 서버에 없어서 값의 범위는 검증하지 않는다.
+ * @param limitTimeSeconds 한 번의 입력을 기다리는 제한 시간(초). 이 시간 안에 요청이 없으면 서버가 AFK로 판정하고 그 phase에 맞는 요청을 대신 호출한다.
  */
-public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns, int mapId) {
+public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns, int mapId,
+                         int limitTimeSeconds) {
 
     public static final long DEFAULT_START_MONEY = 500_000;
     public static final long DEFAULT_SALARY_AMOUNT = 100_000;
@@ -20,6 +22,7 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
     public static final int DEFAULT_MAX_ROUND = 30;
     public static final int DEFAULT_ISLAND_TURNS = 3;
     public static final int DEFAULT_MAP_ID = 1;
+    public static final int DEFAULT_LIMIT_TIME_SECONDS = 20;
 
     /** 한 게임에 참가할 수 있는 플레이어 수의 한계. 방장이 바꾸는 설정이 아니라 서버 규칙의 한계다. */
     public static final int MIN_PLAYERS = 2;
@@ -42,6 +45,14 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
         if (islandTurns < 0) {
             throw new IllegalArgumentException("무인도 영업정지 턴은 0 이상이어야 합니다: " + islandTurns);
         }
+        if (limitTimeSeconds < 1) {
+            throw new IllegalArgumentException("입력 제한 시간은 1초 이상이어야 합니다: " + limitTimeSeconds);
+        }
+    }
+
+    /** 입력 제한 시간을 정하지 않으면 기본값(DEFAULT_LIMIT_TIME_SECONDS)을 쓴다. */
+    public GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns, int mapId) {
+        this(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, mapId, DEFAULT_LIMIT_TIME_SECONDS);
     }
 
     /** 맵 번호를 정하지 않으면 기본 맵(DEFAULT_MAP_ID)을 쓴다. */
@@ -51,12 +62,17 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
 
     /** 맵 번호만 바꾼 설정을 돌려준다. (로비가 방의 맵 번호를 넣을 때 쓴다) */
     public GameConfig withMapId(int mapId) {
-        return new GameConfig(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, mapId);
+        return new GameConfig(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, mapId, limitTimeSeconds);
+    }
+
+    /** 입력 제한 시간만 바꾼 설정을 돌려준다. (방장 설정 또는 테스트에서 시간을 줄일 때 쓴다) */
+    public GameConfig withLimitTimeSeconds(int limitTimeSeconds) {
+        return new GameConfig(startMoney, salaryAmount, taxAmount, maxRound, islandTurns, mapId, limitTimeSeconds);
     }
 
     /** 기본 설정. 방장이 따로 고르지 않았을 때 쓴다. */
     public static GameConfig defaults() {
         return new GameConfig(DEFAULT_START_MONEY, DEFAULT_SALARY_AMOUNT, DEFAULT_TAX_AMOUNT,
-                DEFAULT_MAX_ROUND, DEFAULT_ISLAND_TURNS, DEFAULT_MAP_ID);
+                DEFAULT_MAX_ROUND, DEFAULT_ISLAND_TURNS, DEFAULT_MAP_ID, DEFAULT_LIMIT_TIME_SECONDS);
     }
 }

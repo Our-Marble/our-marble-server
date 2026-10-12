@@ -70,4 +70,39 @@ class GameConfigTest {
         assertThat(changed.startMoney()).isEqualTo(GameConfig.DEFAULT_START_MONEY);   // 나머지는 그대로
         assertThat(changed.maxRound()).isEqualTo(GameConfig.DEFAULT_MAX_ROUND);
     }
+
+    @Test
+    void 입력_제한_시간을_정하지_않으면_기본값이다() {
+        GameConfig config = new GameConfig(1_000_000, 20_000, 50_000, 10, 2, 3);
+
+        assertThat(config.limitTimeSeconds()).isEqualTo(GameConfig.DEFAULT_LIMIT_TIME_SECONDS);
+        assertThat(GameConfig.defaults().limitTimeSeconds()).isEqualTo(20);
+    }
+
+    @Test
+    void 입력_제한_시간을_직접_정하거나_그것만_바꿀_수_있다() {
+        GameConfig custom = new GameConfig(1_000_000, 20_000, 50_000, 10, 2, 3, 15);
+        GameConfig changed = GameConfig.defaults().withMapId(4).withLimitTimeSeconds(5);
+
+        assertThat(custom.limitTimeSeconds()).isEqualTo(15);
+        assertThat(changed.limitTimeSeconds()).isEqualTo(5);
+        assertThat(changed.mapId()).isEqualTo(4);   // 나머지는 그대로
+        assertThat(changed.startMoney()).isEqualTo(GameConfig.DEFAULT_START_MONEY);
+    }
+
+    @Test
+    void 맵_번호만_바꿔도_입력_제한_시간은_유지된다() {
+        GameConfig config = GameConfig.defaults().withLimitTimeSeconds(7).withMapId(2);
+
+        assertThat(config.limitTimeSeconds()).isEqualTo(7);
+    }
+
+    @Test
+    void 입력_제한_시간이_1초_미만이면_거부된다() {
+        assertThat(GameConfig.defaults().withLimitTimeSeconds(1).limitTimeSeconds()).isEqualTo(1);   // 경계값
+        assertThatThrownBy(() -> GameConfig.defaults().withLimitTimeSeconds(0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new GameConfig(500_000, 100_000, 100_000, 30, 3, 1, -5))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }
