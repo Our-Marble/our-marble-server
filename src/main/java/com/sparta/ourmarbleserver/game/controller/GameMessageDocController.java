@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,6 +75,23 @@ public class GameMessageDocController {
         return new DiceRolledPayload(2, 3, 4);
     }
 
+    @Operation(summary = "게임상태동기화", description = "요청 GAME_STATE_REQUEST → 알림 GAME_STATE_SYNC. 재접속한 요청자에게만 현재 게임 상태 전체를 보낸다. phase는 서버가 기다리는 입력(TurnPhase 이름), finalRank 0은 등수 미정, buildingLevel은 0(땅)~3(호텔), ownerId가 null이면 주인 없음 [예시 JSON 열기](/docs/notifications/game-state-sync)")
+    @ApiResponse(responseCode = "200", description = "payload",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = GameStateSyncPayload.class),
+                    examples = @ExampleObject(value = "{\"gameState\": {\"roomId\": \"r_3\", \"turnNumber\": 12, \"roundNumber\": 3, \"currentPlayerId\": 2, \"welfareFund\": 100000, \"phase\": \"AWAITING_ROLL\", \"isDouble\": false, \"consecutiveDoubleCount\": 0, \"playerOrder\": [1, 2], \"playerStates\": [{\"playerId\": 1, \"nickname\": \"Alice\", \"position\": 8, \"money\": 420000, \"islandTurnsRemaining\": 0, \"isBankrupt\": false, \"finalRank\": 0}, {\"playerId\": 2, \"nickname\": \"Bob\", \"position\": 15, \"money\": 310000, \"islandTurnsRemaining\": 0, \"isBankrupt\": false, \"finalRank\": 0}], \"propertyStates\": [{\"propertyId\": 104, \"ownerId\": 1, \"buildingLevel\": 2}, {\"propertyId\": 105, \"ownerId\": 2, \"buildingLevel\": 0}, {\"propertyId\": 106, \"ownerId\": null, \"buildingLevel\": 0}], \"config\": {\"startMoney\": 500000, \"salaryAmount\": 100000, \"taxAmount\": 100000, \"maxRound\": 30, \"islandTurns\": 3, \"mapId\": 1, \"limitTimeSeconds\": 20}}}")))
+    @GetMapping("/game-state-sync")
+    public GameStateSyncPayload gameStateSync() {
+        return new GameStateSyncPayload(new GameStateSyncPayload.GameSnapshot(
+                "r_3", 12, 3, 2L, 100000L, "AWAITING_ROLL", false, 0,
+                List.of(1L, 2L),
+                List.of(new GameStateSyncPayload.PlayerSnapshot(1L, "Alice", 8, 420000L, 0, false, 0),
+                        new GameStateSyncPayload.PlayerSnapshot(2L, "Bob", 15, 310000L, 0, false, 0)),
+                List.of(new GameStateSyncPayload.PropertySnapshot(104, 1L, 2),
+                        new GameStateSyncPayload.PropertySnapshot(105, 2L, 0),
+                        new GameStateSyncPayload.PropertySnapshot(106, null, 0)),
+                new GameConfig(500000L, 100000L, 100000L, 30, 3, 1, 20)));
+    }
+
     @Operation(summary = "자산매각", description = "요청 SELL_PROPERTIES → 알림 PROPERTIES_SOLD. 매각 결과 [예시 JSON 열기](/docs/notifications/properties-sold)")
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PropertiesSoldPayload.class),
@@ -109,10 +128,12 @@ public class GameMessageDocController {
             "/docs/requests/sell-properties",
             "/docs/requests/acquire-property",
             "/docs/requests/purchase-property",
+            "/docs/requests/game-state-request",
             "/docs/notifications/built",
             "/docs/notifications/card-drawn",
             "/docs/notifications/destination-chosen",
             "/docs/notifications/dice-rolled",
+            "/docs/notifications/game-state-sync",
             "/docs/notifications/properties-sold",
             "/docs/notifications/property-acquired",
             "/docs/notifications/property-purchased",
