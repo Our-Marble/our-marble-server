@@ -15,11 +15,13 @@ import java.nio.charset.StandardCharsets;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class MessageRelay implements MessageListener {
+public class MessageRelay // implements MessageListener
+{
     private static final String CHANNEL_PREFIX = "room:";
     private final StringRedisTemplate redisTemplate;
     private final RoomBroadcaster roomBroadcaster;
 
+    /*
     public void publish(
             String roomId,
             String jsonMessage
@@ -37,6 +39,14 @@ public class MessageRelay implements MessageListener {
         String jsonMessage = new String(message.getBody(), StandardCharsets.UTF_8);
         String roomId = channelName.substring(CHANNEL_PREFIX.length());
         log.info("수신: room={} {}", roomId, jsonMessage);
+        roomBroadcaster.broadcastJson(roomId, jsonMessage);
+    }
+    */
+
+    public void publish(
+            String roomId,
+            String jsonMessage
+    ) {
         roomBroadcaster.broadcastJson(roomId, jsonMessage);
     }
 }
