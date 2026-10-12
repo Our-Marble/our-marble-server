@@ -17,7 +17,7 @@ class MessageRelayTest {
 
     @Test
     void 발행하면_room_채널로_보낸다() {
-        relay.publish("r_1", "{\"type\":\"TEST\"}");
+        relay.publishToRoom("r_1", "{\"type\":\"TEST\"}");
 
         verify(redisTemplate).convertAndSend("room:r_1", "{\"type\":\"TEST\"}");
     }
@@ -31,5 +31,23 @@ class MessageRelayTest {
         relay.onMessage(message, null);
 
         verify(roomBroadcaster).broadcastJson("r_1", "{\"type\":\"TEST\"}");
+    }
+
+    @Test
+    void 로비_발행은_lobby_채널로_보낸다() {
+        relay.publishToLobby("{\"type\":\"ROOM_LIST\"}");
+
+        verify(redisTemplate).convertAndSend("lobby", "{\"type\":\"ROOM_LIST\"}");
+    }
+
+    @Test
+    void lobby_채널로_받으면_로비_브로드캐스트로_넘긴다() {
+        DefaultMessage message = new DefaultMessage(
+                "lobby".getBytes(StandardCharsets.UTF_8),
+                "{\"type\":\"ROOM_LIST\"}".getBytes(StandardCharsets.UTF_8));
+
+        relay.onMessage(message, null);
+
+        verify(roomBroadcaster).broadcastLobbyJson("{\"type\":\"ROOM_LIST\"}");
     }
 }

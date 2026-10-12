@@ -29,6 +29,11 @@ public class WebSocketMessageSender {
 
     // 방에 있는 모두에게
     public void sendToRoom(String roomId, MessageType type, Object payload) {
-        messageRelay.publish(roomId, codec.encode(type, payload));
+        messageRelay.publishToRoom(roomId, codec.encode(type, payload));
+    }
+
+    // 로비 화면에 있는 모두에게
+    public void sendToLobby(MessageType type, Object payload) {
+        messageRelay.publishToLobby(codec.encode(type, payload));
     }
 }
