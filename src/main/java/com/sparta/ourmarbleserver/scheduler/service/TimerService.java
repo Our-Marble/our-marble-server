@@ -1,7 +1,6 @@
 package com.sparta.ourmarbleserver.scheduler.service;
 
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -22,7 +21,6 @@ public class TimerService {
     private final AtomicLong counter = new AtomicLong();
     private Handler handler = (roomId, playerId, turnNumber, phase) -> { };   // 아직 아무것도 안 함
 
-    @Autowired(required = false)
     public void setHandler(Handler handler) {
         this.handler = handler;
     }
