@@ -1,4 +1,4 @@
-package com.sparta.ourmarbleserver.game.controller;
+package com.sparta.ourmarbleserver.lobby.controller;
 
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

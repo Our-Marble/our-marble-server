@@ -1,4 +1,4 @@
-package com.sparta.ourmarbleserver.game.controller;
+package com.sparta.ourmarbleserver.lobby.controller;
 
 import java.util.List;
 
