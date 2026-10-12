@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.lobby.service;
 
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.GameState;
@@ -422,13 +423,84 @@ class LobbyServiceTest {
     }
 
     @Test
-    void 시작한_방과_대기_방에_같이_있으면_대기_방을_찾는다() {
+    void 시작한_방에_있는_사람도_방을_찾을_수_있다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(room.roomId());
+    }
+
+    @Test
+    void 시작한_방에_있는_사람은_새_방을_만들거나_입장할_수_없다() {
         RoomInfo started = roomWithTwo();
         service.setReady(started.roomId(), P2, true);
         service.start(started.roomId(), HOST);
-        RoomInfo waiting = service.createRoom(HOST, MAP, 4);
+        RoomInfo other = service.createRoom(P3, MAP, 4);
 
-        assertThat(service.findRoomByPlayer(HOST).roomId()).isEqualTo(waiting.roomId());
-        assertThat(service.findRoomByPlayer(P2).roomId()).isEqualTo(started.roomId());
+        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.join(other.roomId(), P2));
+    }
+
+    // ===== 게임 종료 =====
+
+    @Test
+    void 게임이_끝나면_방이_대기_상태로_돌아가고_멤버가_유지된다() {
+        RoomInfo room = startedRoom();
+
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        RoomInfo info = service.getRoom(room.roomId());
+        assertThat(info.status()).isEqualTo(RoomStatus.WAITING);
+        assertThat(info.hostId()).isEqualTo(HOST);
+        assertThat(info.players()).extracting(RoomPlayer::playerId).containsExactly(HOST, P2);
+    }
+
+    @Test
+    void 게임이_끝나면_방장만_준비_상태가_된다() {
+        RoomInfo room = startedRoom();
+
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        assertThat(service.getRoom(room.roomId()).players())
+                .containsExactly(new RoomPlayer(HOST, true), new RoomPlayer(P2, false));
+    }
+
+    @Test
+    void 게임이_끝나면_방이_목록에_다시_나온다() {
+        RoomInfo room = startedRoom();
+        assertThat(service.listRooms()).isEmpty();
+
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        assertThat(service.listRooms()).extracting(RoomInfo::roomId).containsExactly(room.roomId());
+    }
+
+    @Test
+    void 게임이_끝난_뒤_다시_준비하고_시작할_수_있다() {
+        RoomInfo room = startedRoom();
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        assertError(ErrorCode.NOT_ALL_READY, () -> service.start(room.roomId(), HOST));
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.callCount).isEqualTo(2);
+        assertThat(service.getRoom(room.roomId()).status()).isEqualTo(RoomStatus.PLAYING);
+    }
+
+    @Test
+    void 없는_방의_게임_종료는_예외없이_넘어간다() {
+        service.onGameEnded(new GameEndedEvent("r_없음"));
+
+        assertThat(service.listRooms()).isEmpty();
+    }
+
+    /** 방장 1명과 준비를 마친 2번 플레이어로 게임을 시작한 방. */
+    private RoomInfo startedRoom() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+        return room;
     }
 }
