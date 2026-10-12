@@ -38,6 +38,7 @@ public enum MessageType {
     LEAVE_ROOM,
     SET_READY,         // 준비 / 준비 취소
     START_GAME,
+    REFRESH_ROOM_LIST, // 방 목록 새로고침
 
     // ===== 로비: 서버 -> 클라 알림 (topic: LOBBY) =====
     CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
