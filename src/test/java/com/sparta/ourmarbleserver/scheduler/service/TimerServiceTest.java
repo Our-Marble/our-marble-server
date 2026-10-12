@@ -76,4 +76,37 @@ class TimerServiceTest {
         assertThat(waitTimeout(1500)).isEqualTo(new Timeout("r1", 1L, 1, TurnPhase.AWAITING_ROLL));
         assertThat(waitTimeout(1500)).isEqualTo(new Timeout("r2", 5L, 3, TurnPhase.AWAITING_BUILD));
     }
+
+    @Test
+    void 시간_초과가_난_플레이어는_다음_입력부터_짧게_기다린다() throws Exception {
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            timeouts.add(new Timeout(roomId, playerId, turnNumber, phase));
+            if (phase == TurnPhase.AWAITING_ROLL) {   // 대신 진행이 끝나고 GameService가 다음 타이머를 시작한 상황
+                timer.start(roomId, playerId, turnNumber, TurnPhase.AWAITING_PURCHASE, 2);
+            }
+        });
+
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_ROLL, 2);
+
+        assertThat(waitTimeout(2500)).isEqualTo(new Timeout("r1", 1L, 1, TurnPhase.AWAITING_ROLL));   // 첫 입력은 제한 시간(2초)
+        assertThat(waitTimeout(500)).isNull();
+        assertThat(waitTimeout(800)).isEqualTo(new Timeout("r1", 1L, 1, TurnPhase.AWAITING_PURCHASE)); // 다음은 1초 만에
+    }
+
+    @Test
+    void 사람이_직접_입력하면_AFK가_풀려서_제한_시간을_다시_기다린다() throws Exception {
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            timeouts.add(new Timeout(roomId, playerId, turnNumber, phase));
+            if (phase == TurnPhase.AWAITING_ROLL) {
+                timer.start(roomId, playerId, turnNumber, TurnPhase.AWAITING_PURCHASE, 2);   // 대신 진행이 시작한 타이머
+            }
+        });
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_ROLL, 1);
+        assertThat(waitTimeout(1500)).isNotNull();   // 시간 초과: 1번 플레이어가 AFK가 된다
+
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_PURCHASE, 2);   // 사람이 직접 입력해서 시작된 타이머
+
+        assertThat(waitTimeout(1500)).isNull();   // AFK였다면 1초 만에 울렸다
+        assertThat(waitTimeout(1000)).isEqualTo(new Timeout("r1", 1L, 1, TurnPhase.AWAITING_PURCHASE));   // 제한 시간(2초)
+    }
 }
