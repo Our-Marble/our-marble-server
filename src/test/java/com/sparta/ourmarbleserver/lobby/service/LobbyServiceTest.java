@@ -509,10 +509,11 @@ class LobbyServiceTest {
     // ===== 인원수 없이 방 만들기 (CREATE_ROOM 명세) =====
 
     @Test
-    void 인원수를_안_주면_최대_인원으로_방을_만든다() {
-        RoomInfo room = service.createRoom(HOST, MAP);
+    void 인원수와_맵을_안_주면_최대_인원과_기본_맵으로_방을_만든다() {
+        RoomInfo room = service.createRoom(HOST);
 
         assertThat(room.maxPlayers()).isEqualTo(GameConfig.MAX_PLAYERS);
+        assertThat(room.mapId()).isEqualTo(GameConfig.DEFAULT_MAP_ID);
         assertThat(room.hostId()).isEqualTo(HOST);
     }
 

@@ -40,11 +40,11 @@ public class LobbyService {
     // ==== 방 만들기 / 조회 ====
 
     /**
-     * 방을 만든다. 인원수는 게임 최대 인원(GameConfig.MAX_PLAYERS)으로 정한다.
-     * (CREATE_ROOM 명세에는 mapId만 있다)
+     * 방을 만든다. 인원수는 게임 최대 인원(GameConfig.MAX_PLAYERS), 맵은 기본 맵(GameConfig.DEFAULT_MAP_ID)으로 정한다.
+     * (CREATE_ROOM 요청에는 본문이 없다)
      */
-    public synchronized RoomInfo createRoom(long playerId, int mapId) {
-        return createRoom(playerId, mapId, GameConfig.MAX_PLAYERS);
+    public synchronized RoomInfo createRoom(long playerId) {
+        return createRoom(playerId, GameConfig.DEFAULT_MAP_ID, GameConfig.MAX_PLAYERS);
     }
 
     /**

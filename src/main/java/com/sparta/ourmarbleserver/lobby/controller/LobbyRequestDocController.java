@@ -5,7 +5,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.sparta.ourmarbleserver.lobby.dto.CreateRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.SetReadyRequestPayload;
 
@@ -25,11 +24,11 @@ public class LobbyRequestDocController {
     private static final String NO_RESPONSE =
             "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 ERROR가 요청자에게만 간다.";
 
-    @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 방을 만든다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
+    @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 방을 만든다. 요청 본문은 없다. 맵은 서버가 기본 맵으로 정한다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
             + "오류: ALREADY_IN_ROOM (이미 어떤 방에 있음, 시작한 방 포함)")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/create-room")
-    public void createRoom(@RequestBody CreateRoomRequestPayload body) {
+    public void createRoom() {
     }
 
     @Operation(summary = "방입장", description = "type: ENTER_ROOM. 대기 중인 방에 들어간다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
