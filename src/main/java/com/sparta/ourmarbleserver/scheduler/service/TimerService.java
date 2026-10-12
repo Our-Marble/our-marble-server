@@ -19,7 +19,7 @@ public class TimerService {
     }
 
     /** 시간 초과가 난(AFK) 플레이어는 제한 시간 대신 이 시간만 기다린 뒤 바로 대신 진행한다. */
-    private static final int AFK_DELAY_SECONDS = 1;
+    private static final int AFK_DELAY_SECONDS = 3;
 
     /** 지금 스레드가 대신 진행 중인지. 대신 진행이 부른 start와 사람의 요청이 부른 start를 구분한다. */
     private static final ThreadLocal<Boolean> AUTO_PLAYING = ThreadLocal.withInitial(() -> false);
