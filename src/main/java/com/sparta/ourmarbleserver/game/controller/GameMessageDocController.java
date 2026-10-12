@@ -142,6 +142,10 @@ public class GameMessageDocController {
             "/docs/requests/leave-room",
             "/docs/requests/set-ready",
             "/docs/requests/start-game",
+            "/docs/requests/refresh-room-list",
+            "/docs/notifications/connected",
+            "/docs/notifications/room-entered",
+            "/docs/notifications/room-left",
             "/docs/notifications/room-updated",
             "/docs/notifications/game-started");
 
