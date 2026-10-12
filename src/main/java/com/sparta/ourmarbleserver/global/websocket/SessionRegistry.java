@@ -7,9 +7,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /*
@@ -82,5 +81,10 @@ public class SessionRegistry {
     public boolean isConnected(long playerId) {
         WebSocketSession session = sessions.get(playerId);
         return session != null && session.isOpen();
+    }
+
+    // 이 서버에 접속 중인 playerId 목록 (복사본). 로비 전체 전송 대상을 고를 때 사용
+    public Set<Long> connectedPlayerIds() {
+        return Set.copyOf(sessions.keySet());
     }
 }

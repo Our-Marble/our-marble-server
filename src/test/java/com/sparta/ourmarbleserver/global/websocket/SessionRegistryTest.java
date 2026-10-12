@@ -76,4 +76,12 @@ class SessionRegistryTest {
     void 접속하지_않은_플레이어에게_보내도_예외가_나지_않는다() {
         assertThatCode(() -> registry.send(99L, "hi")).doesNotThrowAnyException();
     }
+
+    @Test
+    void 접속_중인_플레이어_목록을_돌려준다() {
+        registry.register(1L, openSession("s1"));
+        registry.register(2L, openSession("s2"));
+
+        assertThat(registry.connectedPlayerIds()).containsExactlyInAnyOrder(1L, 2L);
+    }
 }
