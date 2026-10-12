@@ -13,5 +13,7 @@ public interface RoomRepository {
     void save(Room room);
 
     void deleteById(String roomId);
+
+    Optional<String> findRoomIdByPlayerId(long playerId);
 }
 

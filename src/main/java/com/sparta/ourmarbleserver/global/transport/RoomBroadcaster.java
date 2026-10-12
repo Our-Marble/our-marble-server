@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -19,10 +21,13 @@ public class RoomBroadcaster {
             String roomId,
             String jsonMessage
     ) {
-        Room room = roomRepository.findById(roomId).orElseThrow();
+        Optional<Room> room = roomRepository.findById(roomId);
+        if (room.isEmpty()) {
+            log.warn("[Broadcast] 방 없음, 전송 생략: room={}", roomId);
+            return;
+        }
 
-        for(long memberId : room.memberIds())
-        {
+        for(long memberId : room.get().memberIds()) {
             sessionRegistry.send(memberId, jsonMessage);
         }
     }
