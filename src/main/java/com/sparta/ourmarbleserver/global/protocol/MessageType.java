@@ -43,5 +43,8 @@ public enum MessageType {
     CONNECTED,
 
     // ===== 로비 -> 게임 전환: 서버 -> 클라 알림 (topic: GAME) =====
-    GAME_STARTED       // game/room/{id} 전원: 게임창 전환 신호
+    GAME_STARTED,      // game/room/{id} 전원: 게임창 전환 신호
+
+    // ===== 게임 진행: 서버 -> 클라 알림 (topic: GAME) =====
+    GAME_STATE_SYNC    // 본인에게: 현재 게임 상태 전체 (재접속 시 화면 복구)
 }
