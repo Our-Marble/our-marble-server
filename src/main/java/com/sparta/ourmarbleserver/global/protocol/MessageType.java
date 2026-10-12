@@ -14,6 +14,7 @@ public enum MessageType {
     SELL_PROPERTIES,
     ACQUIRE_PROPERTY,
     PURCHASE_PROPERTY,
+    GAME_STATE_REQUEST, // 현재 게임 상태 요청 (재접속 시 화면 복구)
 
     // ===== GM: 서버 -> 클라 결과 알림 =====
     BUILT,
@@ -23,9 +24,11 @@ public enum MessageType {
     PROPERTIES_SOLD,
     PROPERTY_ACQUIRED,
     PROPERTY_PURCHASED,
+    GAME_STATE_SYNC,    // 본인에게: 현재 게임 상태 전체 (재접속 시 화면 복구)
 
     // ===== 공통 =====
     ERROR,
+
 
     // (게임 진행·로비·네트워크 담당 추가분은 아래에)
 
@@ -33,18 +36,14 @@ public enum MessageType {
     CREATE_ROOM,
     ENTER_ROOM,
     LEAVE_ROOM,
+    SET_READY,         // 준비 / 준비 취소
     START_GAME,
-    REFRESH_ROOM_LIST, // 로비 새로고침 버튼
 
     // ===== 로비: 서버 -> 클라 알림 (topic: LOBBY) =====
-    ROOM_LIST,         // 본인에게: 방 목록 전체 (로비 진입 시 자동 + 새로고침 응답)
+    CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
     ROOM_ENTERED,      // 본인에게: 방 생성·입장 성공 (대기창 전환 신호)
-    ROOM_UPDATED,      // lobby/room/{id} 전원: 인원·방장 변경
-    CONNECTED,
-
-    // ===== 로비 -> 게임 전환: 서버 -> 클라 알림 (topic: GAME) =====
-    GAME_STARTED,      // game/room/{id} 전원: 게임창 전환 신호
-
-    // ===== 게임 진행: 서버 -> 클라 알림 (topic: GAME) =====
-    GAME_STATE_SYNC    // 본인에게: 현재 게임 상태 전체 (재접속 시 화면 복구)
+    ROOM_LEFT,         // 본인에게: 방 나가기 성공
+    ROOM_LIST,         // 본인에게: 방목록
+    ROOM_UPDATED,      // 방 전원: 인원·준비·방장 변경
+    GAME_STARTED     // 방 전원: 게임창 전환 신호
 }
