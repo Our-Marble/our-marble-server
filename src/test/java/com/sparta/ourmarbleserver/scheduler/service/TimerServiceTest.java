@@ -109,4 +109,53 @@ class TimerServiceTest {
         assertThat(waitTimeout(3500)).isNull();   // AFK였다면 1초 만에 울렸다
         assertThat(waitTimeout(2000)).isEqualTo(new Timeout("r1", 1L, 1, TurnPhase.AWAITING_PURCHASE));   // 제한 시간(2초)
     }
+
+    @Test
+    void 시간_초과가_난_플레이어는_서버가_대신_진행해도_된다() throws Exception {
+        BlockingQueue<Boolean> allowed = new LinkedBlockingQueue<>();
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> allowed.add(timer.canAutoPlay(roomId, playerId, false)));
+
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_ROLL, 1);
+
+        assertThat(allowed.poll(2, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void 타이머가_울린_뒤_사람이_먼저_움직이면_서버는_대신_진행할_수_없다() throws Exception {
+        BlockingQueue<Boolean> allowed = new LinkedBlockingQueue<>();
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            Thread human = new Thread(() -> timer.release(roomId, playerId));   // 사람이 요청을 보냈다 (사람 쪽 스레드)
+            human.start();
+            try {
+                human.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            allowed.add(timer.canAutoPlay(roomId, playerId, false));
+            allowed.add(timer.canAutoPlay(roomId, playerId, true));
+        });
+
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_ROLL, 1);
+
+        assertThat(allowed.poll(2, TimeUnit.SECONDS)).isFalse();   // 사람이 먼저 움직였으니 서버 대신 진행은 안 된다
+        assertThat(allowed.poll(2, TimeUnit.SECONDS)).isTrue();    // 봇은 AFK와 상관없이 된다
+    }
+
+    @Test
+    void 서버_대신_진행_중에_부른_AFK_해제는_무시된다() throws Exception {
+        BlockingQueue<Boolean> allowed = new LinkedBlockingQueue<>();
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            timer.release(roomId, playerId);   // 대신 진행이 부른 것이라 무시된다
+            allowed.add(timer.canAutoPlay(roomId, playerId, false));
+        });
+
+        timer.start("r1", 1L, 1, TurnPhase.AWAITING_ROLL, 1);
+
+        assertThat(allowed.poll(2, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void 사람이_보낸_요청은_AFK_여부와_상관없이_허용된다() {
+        assertThat(timer.canAutoPlay("r1", 1L, false)).isTrue();   // 타이머 스레드가 아니다
+    }
 }

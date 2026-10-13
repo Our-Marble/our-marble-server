@@ -324,8 +324,12 @@ public class GameService {
      * 속한 진행 중인 게임이 없으면(로비에 있는 사람 등) 빈 값을 돌려준다.
      */
     public synchronized Optional<GameMessage> syncState(long playerId) {
-        return repository.findByPlayerId(playerId)
-                .map(state -> new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state)));
+        return repository.findByPlayerId(playerId).map(state -> {
+            if (timerService != null) {
+                timerService.release(state.getRoomId(), playerId);   // 재접속한 사람은 AFK를 푼다
+            }
+            return new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state));
+        });
     }
 
     // ===== 상태 저장과 게임 종료 =====
@@ -404,6 +408,13 @@ public class GameService {
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
         GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        if (timerService != null) {
+            // 유저 우선: 사람이 보낸 요청은 거부되더라도 AFK를 풀고, 서버의 대신 진행은 AFK(또는 봇)인 플레이어에게만 실행한다.
+            timerService.release(state.getRoomId(), playerId);
+            if (!timerService.canAutoPlay(state.getRoomId(), playerId, state.getPlayerState(playerId).isBot())) {
+                throw new GameException(GameErrorCode.INVALID_STATE);
+            }
+        }
         if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
             throw new GameException(ErrorCode.INVALID_PROPERTY);
         }
