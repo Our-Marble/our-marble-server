@@ -8,6 +8,7 @@ import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.dto.PropertyPurchasedPayload;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
@@ -108,7 +109,7 @@ class GameServicePurchaseTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(1_000);
 
-        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), GameErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(1_000);
         assertThat(state().getPropertyState(PROPERTY_ID).orElseThrow().hasOwner()).isFalse();
@@ -131,28 +132,28 @@ class GameServicePurchaseTest {
         GameService service = newService();
         state().getPropertyState(PROPERTY_ID).orElseThrow().setOwnerId(2L);
 
-        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), ErrorCode.ALREADY_OWNED);
+        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), GameErrorCode.ALREADY_OWNED);
     }
 
     @Test
     void 내_말이_그_땅_위에_없으면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.purchaseProperty(1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.purchaseProperty(1L, 104, true), GameErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 없는_땅_번호면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.purchaseProperty(1L, 999, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.purchaseProperty(1L, 999, true), GameErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.purchaseProperty(2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.purchaseProperty(2L, PROPERTY_ID, true), GameErrorCode.NOT_YOUR_TURN);
     }
 
     @Test
@@ -160,6 +161,6 @@ class GameServicePurchaseTest {
         GameService service = newService();
         state().setPhase(TurnPhase.AWAITING_ROLL);
 
-        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.purchaseProperty(1L, PROPERTY_ID, true), GameErrorCode.INVALID_STATE);
     }
 }

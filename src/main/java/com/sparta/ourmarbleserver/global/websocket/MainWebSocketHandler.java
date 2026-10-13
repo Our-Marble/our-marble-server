@@ -2,10 +2,7 @@ package com.sparta.ourmarbleserver.global.websocket;
 
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ConnectedPayload;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
-import com.sparta.ourmarbleserver.global.protocol.ErrorPayload;
-import com.sparta.ourmarbleserver.global.protocol.MessageType;
+import com.sparta.ourmarbleserver.global.protocol.*;
 import com.sparta.ourmarbleserver.global.transport.InboundMessage;
 import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRouter;
@@ -78,7 +75,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         } catch (JacksonException e) {
             // 핸들러가 body를 요청 DTO로 바꾸다 실패 (필드 타입이 틀림 등)
             log.info("[WS] 본문 해석 실패: player={} message={}", playerId, message.getPayload());
-            sendError(playerId, ErrorCode.INVALID_MESSAGE);
+            sendError(playerId, CommonErrorCode.INVALID_MESSAGE);
         } catch (RuntimeException e) {
             // 예상 못 한 서버 오류. 연결은 유지하고 로그만 남긴다.
             log.error("[WS] 처리 중 오류: player={} message={}", playerId, message.getPayload(), e);
@@ -102,6 +99,6 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendError(long playerId, ErrorCode code) {
-        sender.sendToPlayer(playerId, MessageType.ERROR, ErrorPayload.of(code));
+        sender.sendToPlayer(playerId, code.type(), ErrorPayload.of(code));   // 오류 종류에 따라 COMMON_ERROR / LOBBY_ERROR / GAME_ERROR
     }
 }
