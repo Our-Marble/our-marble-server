@@ -4,6 +4,7 @@ import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.PropertyAcquiredPayload;
@@ -125,7 +126,7 @@ class GameServiceAcquireTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(159_999);
 
-        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), GameErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(property(PROPERTY_ID).isOwnedBy(2L)).isTrue();
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(159_999);
@@ -148,10 +149,10 @@ class GameServiceAcquireTest {
         GameService service = newService();
 
         property(PROPERTY_ID).setOwnerId(1L);
-        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), GameErrorCode.CANNOT_ACQUIRE);
 
         property(PROPERTY_ID).setOwnerId(null);
-        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.CANNOT_ACQUIRE);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), GameErrorCode.CANNOT_ACQUIRE);
     }
 
     @Test
@@ -159,17 +160,17 @@ class GameServiceAcquireTest {
         GameService service = newService();
         property(104).setOwnerId(2L);
 
-        assertRejected(() -> service.acquireProperty(1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.acquireProperty(1L, 104, true), GameErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니거나_인수를_고를_phase가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.acquireProperty(2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.acquireProperty(2L, PROPERTY_ID, true), GameErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.acquireProperty(1L, PROPERTY_ID, true), GameErrorCode.INVALID_STATE);
     }
 
     @Test

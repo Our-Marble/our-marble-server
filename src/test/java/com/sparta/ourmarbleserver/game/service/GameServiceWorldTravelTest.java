@@ -8,6 +8,7 @@ import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.junit.jupiter.api.Test;
@@ -143,8 +144,8 @@ class GameServiceWorldTravelTest {
     void 보드_밖의_목적지는_거부되고_상태가_바뀌지_않는다() {
         GameService service = newServiceChoosing();
 
-        assertRejected(() -> service.chooseDestination(1L, -1), ErrorCode.INVALID_PROPERTY);
-        assertRejected(() -> service.chooseDestination(1L, 32), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.chooseDestination(1L, -1), GameErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.chooseDestination(1L, 32), GameErrorCode.INVALID_PROPERTY);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
@@ -154,7 +155,7 @@ class GameServiceWorldTravelTest {
     void 세계여행_칸을_목적지로_고르면_거부되고_상태가_바뀌지_않는다() {
         GameService service = newServiceChoosing();
 
-        assertRejected(() -> service.chooseDestination(1L, WORLD_TRAVEL_TILE), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.chooseDestination(1L, WORLD_TRAVEL_TILE), GameErrorCode.INVALID_PROPERTY);
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(WORLD_TRAVEL_TILE);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_DESTINATION);
@@ -176,9 +177,9 @@ class GameServiceWorldTravelTest {
     void 내_차례가_아니거나_목적지를_고를_phase가_아니면_거부된다() {
         GameService service = newServiceChoosing();
 
-        assertRejected(() -> service.chooseDestination(2L, 3), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.chooseDestination(2L, 3), GameErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.chooseDestination(1L, 3), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.chooseDestination(1L, 3), GameErrorCode.INVALID_STATE);
     }
 }

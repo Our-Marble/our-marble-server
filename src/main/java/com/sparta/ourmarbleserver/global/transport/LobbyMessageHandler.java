@@ -1,7 +1,7 @@
 package com.sparta.ourmarbleserver.global.transport;
 
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
@@ -55,7 +55,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
 
     private void enterRoom(long playerId, EnterRoomRequestPayload request) {
         if (request.roomId() == null || request.roomId().isBlank()) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
         lobbyService.join(request.roomId(), playerId);
         notifyEntered(playerId, request.roomId());

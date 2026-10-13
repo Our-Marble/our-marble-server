@@ -1,45 +1,13 @@
 package com.sparta.ourmarbleserver.global.protocol;
 
-/**
- * 요청 실패 시 ERROR 알림에 실리는 오류 코드와 기본 문구.
- * 오류가 나면 서버 상태는 바뀌지 않는다.
- */
-public enum ErrorCode {
+public interface ErrorCode {
 
-    // 기본
-    NOT_YOUR_TURN("내 차례가 아닙니다."),
-    INVALID_STATE("지금은 할 수 없는 요청입니다."),
-    NOT_ENOUGH_MONEY("현금이 부족합니다."),
-    INVALID_PROPERTY("올바르지 않은 땅입니다."),
-    INVALID_MESSAGE("메시지 형식이 올바르지 않습니다."), // 네트워크: JSON이 아니거나 type이 없거나 모르는 값
+    // 오류 코드 이름, enum에는 자동으로 있음
+    String name();
 
-    // 경제·부동산 추가
-    ALREADY_OWNED("이미 주인이 있는 땅입니다."),
-    NOT_OWNER("내 땅이 아닙니다."),
-    CANNOT_BUILD("건설할 수 없는 땅입니다."),
-    MAX_LEVEL("더 이상 건설할 수 없습니다."),
-    CANNOT_ACQUIRE("인수할 수 없는 땅입니다."),
-    NOT_ENOUGH_SELL("선택한 땅을 팔아도 통행료가 부족합니다."),
-    PLAYER_BANKRUPT("파산한 플레이어입니다."),
-    INVALID_PROPERTY_LIST("매각할 땅 목록이 올바르지 않습니다."),
+    // 메시지
+    String message();
 
-    // 로비
-    ROOM_NOT_FOUND("방을 찾을 수 없습니다."),
-    ROOM_FULL("방이 가득 찼습니다."),
-    ALREADY_IN_ROOM("이미 방에 참가 중입니다."),
-    NOT_IN_ROOM("방에 참가하지 않았습니다."),
-    NOT_HOST("방장만 할 수 있습니다."),
-    ROOM_ALREADY_STARTED("이미 시작한 방입니다."),
-    NOT_ENOUGH_PLAYERS("최소 2명이 필요합니다."),
-    NOT_ALL_READY("모두 준비해야 시작할 수 있습니다.");
-
-    private final String message;
-
-    ErrorCode(String message) {
-        this.message = message;
-    }
-
-    public String message() {
-        return message;
-    }
+    // 이 오류를 보낼 때 쓰는 메시지 type (COMMON_ERROR / LOBBY_ERROR / GAME_ERROR)
+    MessageType type();
 }

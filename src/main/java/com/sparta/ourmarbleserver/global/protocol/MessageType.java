@@ -27,7 +27,9 @@ public enum MessageType {
     GAME_STATE_SYNC,    // 본인에게: 현재 게임 상태 전체 (재접속 시 화면 복구)
 
     // ===== 공통 =====
-    ERROR,
+    COMMON_ERROR,      // 요청자에게: 메시지 형식 오류 등 로비·게임 구분이 안 되는 거절 (code: CommonErrorCode)
+    LOBBY_ERROR,       // 요청자에게: 로비·대기방 요청 거절 (code: LobbyErrorCode)
+    GAME_ERROR,        // 요청자에게: 게임 요청 거절 (code: GameErrorCode)
 
 
     // (게임 진행·로비·네트워크 담당 추가분은 아래에)

@@ -1,7 +1,7 @@
 package com.sparta.ourmarbleserver.global.transport;
 
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -36,10 +36,10 @@ public class MessageCodec {
         try {
             root = objectMapper.readTree(json);
         } catch (JacksonException e) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
         if (root == null || !root.isObject()) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
 
         MessageType type = parseEnum(MessageType.class, root.get(TYPE));
@@ -74,12 +74,12 @@ public class MessageCodec {
 
     private static <E extends Enum<E>> E parseEnum(Class<E> enumType, JsonNode node) {
         if (node == null || !node.isString()) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
         try {
             return Enum.valueOf(enumType, node.asString());
         } catch (IllegalArgumentException e) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
     }
 }
