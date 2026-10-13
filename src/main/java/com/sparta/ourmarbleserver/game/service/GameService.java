@@ -407,7 +407,7 @@ public class GameService {
      * → 요청이 현재 phase에 맞는지. 상태를 바꾸기 전에 호출하므로 실패해도 상태는 그대로다.
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
-        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
         if (timerService != null) {
             // 유저 우선: 사람이 보낸 요청은 거부되더라도 AFK를 풀고, 서버의 대신 진행은 AFK(또는 봇)인 플레이어에게만 실행한다.
             timerService.release(state.getRoomId(), playerId);
