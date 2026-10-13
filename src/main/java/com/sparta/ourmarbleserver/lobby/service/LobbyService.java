@@ -123,8 +123,9 @@ public class LobbyService {
     /**
      * 나가기. 참가하지 않았으면 NOT_IN_ROOM, 이미 시작한 방이면 ROOM_ALREADY_STARTED.
      * 방장이 나가면 가장 먼저 참가한 사람이 방장이 되고, 마지막 사람이 나가면 방이 삭제된다.
+     * 방이 남아 있으면 true, 마지막 사람이 나가 방이 삭제됐으면 false.
      */
-    public synchronized void leave(String roomId, long playerId) {
+    public synchronized boolean leave(String roomId, long playerId) {
         Room room = findRoom(roomId);
         if (!room.hasMember(playerId)) {
             throw new GameException(ErrorCode.NOT_IN_ROOM);
@@ -136,7 +137,7 @@ public class LobbyService {
         room.removeMember(playerId);
         if (room.isEmpty()) {
             repository.deleteById(roomId);
-            return;
+            return false;
         }
         if (room.getHostId() == playerId) {
             long newHostId = room.memberIds().getFirst();
@@ -144,6 +145,7 @@ public class LobbyService {
             room.setReady(newHostId, true); // 방장은 항상 준비 상태
         }
         repository.save(room);
+        return true;
     }
 
     // ==== ROOM_UPDATED 내용 ====
