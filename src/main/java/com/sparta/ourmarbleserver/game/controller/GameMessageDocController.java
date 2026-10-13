@@ -1,13 +1,9 @@
 package com.sparta.ourmarbleserver.game.controller;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
-import org.springdoc.core.customizers.OpenApiCustomizer;
-import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,7 +22,6 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.models.Paths;
 
 /**
  * Redoc 문서 전용 컨트롤러. WebSocket 메시지는 REST 엔드포인트가 없어서,
@@ -119,68 +114,4 @@ public class GameMessageDocController {
         return new PropertyPurchasedPayload(3, 104, true);
     }
 
-    /** 문서에 나오는 순서 (명세 표 순서). Redoc은 이 순서 그대로 보여 준다. */
-    private static final List<String> DOC_ORDER = List.of(
-            "/docs/requests/build",
-            "/docs/requests/draw-card",
-            "/docs/requests/choose-destination",
-            "/docs/requests/roll-dice",
-            "/docs/requests/sell-properties",
-            "/docs/requests/acquire-property",
-            "/docs/requests/purchase-property",
-            "/docs/requests/game-state-request",
-            "/docs/notifications/built",
-            "/docs/notifications/card-drawn",
-            "/docs/notifications/destination-chosen",
-            "/docs/notifications/dice-rolled",
-            "/docs/notifications/properties-sold",
-            "/docs/notifications/property-acquired",
-            "/docs/notifications/property-purchased",
-            "/docs/notifications/game-state-sync",
-            "/docs/requests/create-room",
-            "/docs/requests/enter-room",
-            "/docs/requests/leave-room",
-            "/docs/requests/set-ready",
-            "/docs/requests/start-game",
-            "/docs/requests/refresh-room-list",
-            "/docs/notifications/connected",
-            "/docs/notifications/room-entered",
-            "/docs/notifications/room-left",
-            "/docs/notifications/room-updated",
-            "/docs/notifications/game-started",
-            "/docs/notifications/error");
-
-    /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
-    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림", "로비 요청", "로비 알림", "공통 알림");
-
-    /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */
-    @Bean
-    public OpenApiCustomizer notificationOrderCustomizer() {
-        return openApi -> {
-            if (openApi.getPaths() == null) {
-                return;
-            }
-            Paths ordered = new Paths();
-            DOC_ORDER.forEach(path -> {
-                if (openApi.getPaths().containsKey(path)) {
-                    ordered.addPathItem(path, openApi.getPaths().get(path));
-                }
-            });
-            openApi.getPaths().forEach((path, item) -> {
-                if (!ordered.containsKey(path)) {
-                    ordered.addPathItem(path, item);
-                }
-            });
-            openApi.setPaths(ordered);
-
-            if (openApi.getTags() != null) {
-                List<io.swagger.v3.oas.models.tags.Tag> tags = new ArrayList<>(openApi.getTags());
-                tags.sort(Comparator.comparingInt(tag -> {
-                    int index = TAG_ORDER.indexOf(tag.getName());
-                    return index < 0 ? TAG_ORDER.size() : index;
-                }));
-                openApi.setTags(tags);
-            }
-        };
-    }
 }
