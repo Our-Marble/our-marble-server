@@ -11,6 +11,7 @@ import com.sparta.ourmarbleserver.lobby.state.Room;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -91,6 +92,14 @@ public class LobbyService {
     public synchronized String roomIdOf(long playerId) {
         return repository.findRoomIdByPlayerId(playerId)
                 .orElseThrow(() -> new GameException(LobbyErrorCode.NOT_IN_ROOM));
+    }
+
+    /** 게임 중(PLAYING)인 방에 있으면 그 방 id. 재접속 시 게임 화면으로 돌려보낼 때 쓴다. */
+    public synchronized Optional<String> playingRoomIdOf(long playerId) {
+        return repository.findRoomIdByPlayerId(playerId)
+                .flatMap(repository::findById)
+                .filter(room -> room.getStatus() == RoomStatus.PLAYING)
+                .map(Room::getRoomId);
     }
 
     /** 이 플레이어가 들어 있는 방. 어느 방에도 없으면 NOT_IN_ROOM. */
@@ -240,6 +249,7 @@ public class LobbyService {
      * 게임 요청을 처리하는 도중에 불리므로 방이 없어도 예외를 던지지 않는다.
      */
     @EventListener
+    @Order(1)   // 방을 WAITING 상태로 먼저 되돌리고 그 후 연결 끊긴 멤버 정리(@Order(2)) 실행
     public synchronized void onGameEnded(GameEndedEvent event) {
         repository.findById(event.roomId()).ifPresent(room -> {
             room.setStatus(RoomStatus.WAITING);
@@ -248,6 +258,41 @@ public class LobbyService {
                     .forEach(id -> room.setReady(id, false));
             repository.save(room);
         });
+    }
+
+    /**
+     * 대기 중(WAITING)인 방에 있으면 내보낸다. 게임 중(PLAYING)이면 그대로 둔다.
+     * 내보낸 뒤 방이 남아 있으면 그 방 id(남은 사람에게 ROOM_UPDATED를 보내야 함), 아니면 empty.
+     */
+    public synchronized Optional<String> leaveWaitingRoom(long playerId) {
+        Optional<Room> room = repository.findRoomIdByPlayerId(playerId).flatMap(repository::findById);
+        if (room.isEmpty() || room.get().getStatus() != RoomStatus.WAITING) {
+            return Optional.empty();
+        }
+        String roomId = room.get().getRoomId();
+        return leave(roomId, playerId) ? Optional.of(roomId) : Optional.empty();
+    }
+
+    /** 방의 멤버 id 목록 (복사본). 방이 없으면 빈 목록. */
+    public synchronized List<Long> memberIdsOf(String roomId) {
+        return repository.findById(roomId)
+                .map(room -> List.copyOf(room.memberIds()))
+                .orElse(List.of());
+    }
+
+    /**
+     * 대기방에서 여러 명을 내보낸다. 게임이 끝난 뒤 접속이 끊긴 멤버를 정리할 때 쓴다.
+     * 방장이 나가면 방장이 넘어가고, 모두 나가면 방이 삭제된다. 방이 남아 있으면 true.
+     */
+    public synchronized boolean removeMembers(String roomId, Collection<Long> playerIds) {
+        boolean remains = repository.findById(roomId).isPresent();
+        for (long playerId : playerIds) {
+            if (!remains) {
+                break;
+            }
+            remains = leave(roomId, playerId);
+        }
+        return remains;
     }
 
     // ==== 도우미 ====
