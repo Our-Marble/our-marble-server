@@ -3,7 +3,7 @@ package com.sparta.ourmarbleserver.lobby.dto;
 import java.util.List;
 
 /**
- * ROOM_LIST 알림: 대기 중인 방 목록. REFRESH_ROOM_LIST를 보낸 사람에게만 보낸다.
+ * ROOM_LIST 알림: 대기 중인 방 목록. ROOM_LIST_REQUEST를 보낸 사람에게만 보낸다.
  * <pre>
  * { "type": "ROOM_LIST",
  *   "rooms": [ { "roomId": "r_3", "hostNickname": "철수", "mapId": 1, "playerCount": 2 } ] }

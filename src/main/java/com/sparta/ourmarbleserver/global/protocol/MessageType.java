@@ -32,15 +32,15 @@ public enum MessageType {
 
     // (게임 진행·로비·네트워크 담당 추가분은 아래에)
 
-    // ===== 로비: 클라 -> 서버 요청 (topic: LOBBY) =====
+    // ===== 로비: 클라 -> 서버 요청 =====
     CREATE_ROOM,
     ENTER_ROOM,
     LEAVE_ROOM,
     SET_READY,         // 준비 / 준비 취소
     START_GAME,
-    REFRESH_ROOM_LIST, // 방 목록 새로고침
+    ROOM_LIST_REQUEST,
 
-    // ===== 로비: 서버 -> 클라 알림 (topic: LOBBY) =====
+    // ===== 로비: 서버 -> 클라 알림 =====
     CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
     ROOM_ENTERED,      // 본인에게: 방 생성·입장 성공 (대기창 전환 신호)
     ROOM_LEFT,         // 본인에게: 방 나가기 성공
