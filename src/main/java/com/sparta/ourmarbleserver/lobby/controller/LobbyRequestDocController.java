@@ -5,7 +5,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.sparta.ourmarbleserver.lobby.dto.CreateRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.SetReadyRequestPayload;
 
@@ -25,21 +24,21 @@ public class LobbyRequestDocController {
     private static final String NO_RESPONSE =
             "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 ERROR가 요청자에게만 간다.";
 
-    @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 방을 만든다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
+    @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 방을 만든다. 요청 본문은 없다. 맵은 서버가 기본 맵으로 정한다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 요청자에게 ROOM_ENTERED, 방 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
             + "오류: ALREADY_IN_ROOM (이미 어떤 방에 있음, 시작한 방 포함)")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/create-room")
-    public void createRoom(@RequestBody CreateRoomRequestPayload body) {
+    public void createRoom() {
     }
 
-    @Operation(summary = "방입장", description = "type: ENTER_ROOM. 대기 중인 방에 들어간다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
+    @Operation(summary = "방입장", description = "type: ENTER_ROOM. 대기 중인 방에 들어간다. 결과는 요청자에게 ROOM_ENTERED, 방 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
             + "오류 (검증 순서): ROOM_NOT_FOUND (없는 방) → ROOM_ALREADY_STARTED (시작한 방) → ALREADY_IN_ROOM (이미 어떤 방에 있음) → ROOM_FULL (가득 참)")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/enter-room")
     public void enterRoom(@RequestBody EnterRoomRequestPayload body) {
     }
 
-    @Operation(summary = "방나가기", description = "type: LEAVE_ROOM. 방에서 나간다. 요청 본문은 없다. 방장이 나가면 가장 먼저 참가한 사람이 방장이 되고, 마지막 사람이 나가면 방이 삭제된다. 결과는 ROOM_UPDATED 알림으로 간다.\n\n"
+    @Operation(summary = "방나가기", description = "type: LEAVE_ROOM. 방에서 나간다. 요청 본문은 없다. 방장이 나가면 가장 먼저 참가한 사람이 방장이 되고, 마지막 사람이 나가면 방이 삭제된다. 결과는 요청자에게 ROOM_LEFT, 남은 방 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
             + "오류: NOT_IN_ROOM (어느 방에도 없음) → ROOM_ALREADY_STARTED (시작한 방)")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/leave-room")
@@ -58,5 +57,11 @@ public class LobbyRequestDocController {
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/start-game")
     public void startGame() {
+    }
+
+    @Operation(summary = "방목록새로고침", description = "type: REFRESH_ROOM_LIST. 대기 중인 방 목록을 다시 요청한다. 요청 본문은 없다. 결과는 ROOM_LIST 알림으로 요청자에게만 간다.")
+    @ApiResponse(responseCode = "200", description = "응답 없음. 성공하면 방 목록(ROOM_LIST)이 요청자에게만 가고, 실패하면 ERROR가 요청자에게만 간다.")
+    @PostMapping("/refresh-room-list")
+    public void refreshRoomList() {
     }
 }
