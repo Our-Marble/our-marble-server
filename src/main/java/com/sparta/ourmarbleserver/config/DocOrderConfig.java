@@ -49,7 +49,7 @@ public class DocOrderConfig {
             "/docs/notifications/error");
 
     /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
-    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림", "로비 요청", "로비 알림", "공통 알림");
+    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림", "로비 요청", "로비 알림", "오류 알림");
 
 
     /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */

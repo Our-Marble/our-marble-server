@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Redoc 문서 전용 컨트롤러. 게임·로비 공통으로 요청이 거절됐을 때 가는 ERROR 알림의 모양과 오류 코드 목록을 문서에 보여 주려고 만들었다.
  * 오류 코드 설명은 ErrorCode에 맞춰 직접 적은 값이라, ErrorCode가 바뀌면 같이 고쳐야 한다. 실제 로직과 무관하다.
  */
-@Tag(name = "공통 알림", description = "게임·로비 공통으로 서버가 WebSocket으로 보내는 알림")
+@Tag(name = "오류 알림", description = "요청이 거절됐을 때 서버가 WebSocket으로 요청자에게만 보내는 알림")
 @RestController
 @RequestMapping("/docs/notifications")
 public class ErrorMessageDocController {
