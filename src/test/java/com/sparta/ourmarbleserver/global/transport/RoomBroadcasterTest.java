@@ -5,10 +5,10 @@ import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.*;
 
 class RoomBroadcasterTest {
 
@@ -35,5 +35,18 @@ class RoomBroadcasterTest {
                 .doesNotThrowAnyException();
 
         verifyNoInteractions(sessionRegistry);
+    }
+
+    @Test
+    void 로비_전송은_방이_없는_접속자에게만_보낸다() {
+        Room room = new Room("r_1", 1L, 1, 4);
+        room.addMember(1L, true);
+        roomRepository.save(room);                         // 1번은 방 안, 2번은 로비
+        when(sessionRegistry.connectedPlayerIds()).thenReturn(Set.of(1L, 2L));
+
+        broadcaster.broadcastLobbyJson("{\"type\":\"ROOM_LIST\"}");
+
+        verify(sessionRegistry).send(2L, "{\"type\":\"ROOM_LIST\"}");
+        verify(sessionRegistry, never()).send(1L, "{\"type\":\"ROOM_LIST\"}");
     }
 }

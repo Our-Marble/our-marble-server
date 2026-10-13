@@ -9,6 +9,7 @@ import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.InboundMessage;
 import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRouter;
+import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -41,6 +42,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     private final MessageRouter router;
     private final WebSocketMessageSender sender;
     private final PlayerService playerService;
+    private final LobbyService lobbyService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws IOException {
@@ -60,6 +62,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
 
         sessionRegistry.register(playerId, session);    // 등록 먼저
         sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, nickname));
+        sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList());
     }
 
     @Override
