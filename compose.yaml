@@ -20,17 +20,21 @@ services:
     image: redis:7.4
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
-    volumes:
-      - redis-data:/data
 
-#이메일 인증 메일을 로컬에서 확인하기 위한 개발용 SMTP 서버이메일 인증을 위한 개발용 SMTP 서버
+  # 이메일 인증 메일을 로컬에서 확인하기 위한 개발용 SMTP 서버
   mailpit:
     image: axllent/mailpit
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "1025:1025" # SMTP
+      - "8025:8025" # 웹 UI
+
+volumes:
+  mysql-data:
+  redis-data:
