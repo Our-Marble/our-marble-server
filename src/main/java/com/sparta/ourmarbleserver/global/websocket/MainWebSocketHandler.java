@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.global.websocket;
 
+import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ConnectedPayload;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
@@ -8,14 +9,18 @@ import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.transport.InboundMessage;
 import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRouter;
+import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import tools.jackson.core.JacksonException;
+
+import java.io.IOException;
 
 /**
  * 서버의 모든 웹소켓 통신(로비·대기방·게임)을 받는 단 하나의 창구.
@@ -36,13 +41,28 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     private final SessionRegistry sessionRegistry;
     private final MessageRouter router;
     private final WebSocketMessageSender sender;
+    private final PlayerService playerService;
+    private final LobbyService lobbyService;
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(WebSocketSession session) throws IOException {
         long playerId = playerIdOf(session);
         log.info("[WS] 연결: player={} session={}", playerId, session.getId());
+
+        // nickname 찾기
+        String nickname;
+        try {
+            nickname = playerService.findMe(playerId).getNickname();
+        } catch (ResponseStatusException e) {
+            // 토큰은 유효하지만 회원이 없음 (탈퇴 등) > 연결 거부
+            log.info("[WS] 연결 거부: 회원 없음 plyaer={}", playerId);
+            session.close(CloseStatus.POLICY_VIOLATION);
+            return;
+        }
+
         sessionRegistry.register(playerId, session);    // 등록 먼저
-        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId));
+        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, nickname));
+        sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList());
     }
 
     @Override

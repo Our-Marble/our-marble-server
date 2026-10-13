@@ -22,7 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "게임 요청", description = "클라이언트가 WebSocket으로 서버에 보내는 게임 요청")
 @RestController
 @RequestMapping("/docs/requests")
-public class RequestDocController {
+public class GameRequestDocController {
 
     private static final String NO_RESPONSE =
             "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 ERROR가 요청자에게만 간다.";
@@ -67,5 +67,12 @@ public class RequestDocController {
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/purchase-property")
     public void purchaseProperty(@RequestBody PurchasePropertyRequestPayload body) {
+    }
+    
+    @Operation(summary = "게임상태요청", description = "type: GAME_STATE_REQUEST. 재접속했을 때 현재 게임 상태를 요청한다. 요청 본문은 없다. 결과는 GAME_STATE_SYNC 알림으로 요청자에게만 간다.\n\n"
+            + "진행 중인 게임이 없으면(로비에 있는 사람 등) 아무 응답도 가지 않는다.")
+    @ApiResponse(responseCode = "200", description = "응답 없음. 성공하면 GAME_STATE_SYNC가 요청자에게만 간다.")
+    @PostMapping("/game-state-request")
+    public void gameStateRequest() {
     }
 }

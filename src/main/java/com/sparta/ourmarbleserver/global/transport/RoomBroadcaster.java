@@ -31,4 +31,13 @@ public class RoomBroadcaster {
             sessionRegistry.send(memberId, jsonMessage);
         }
     }
+
+    // 이 서버 접속자 중 방에 들어가 있지 않은(= 로비 화면에 있는) 사람에게 json
+    public void broadcastLobbyJson(String json) {
+        for (long playerId : sessionRegistry.connectedPlayerIds()) {
+            if (roomRepository.findRoomIdByPlayerId(playerId).isEmpty()) {
+                sessionRegistry.send(playerId, json);
+            }
+        }
+    }
 }

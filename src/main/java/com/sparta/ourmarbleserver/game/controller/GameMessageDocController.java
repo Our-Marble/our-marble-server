@@ -1,11 +1,9 @@
 package com.sparta.ourmarbleserver.game.controller;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
-import org.springdoc.core.customizers.OpenApiCustomizer;
-import org.springframework.context.annotation.Bean;
+import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,7 +22,6 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.models.Paths;
 
 /**
  * Redoc 문서 전용 컨트롤러. WebSocket 메시지는 REST 엔드포인트가 없어서,
@@ -35,7 +32,7 @@ import io.swagger.v3.oas.models.Paths;
 @Tag(name = "게임 알림", description = "서버가 WebSocket으로 방 전원에게 보내는 게임 알림")
 @RestController
 @RequestMapping("/docs/notifications")
-public class MessageDocController {
+public class GameMessageDocController {
 
     @Operation(summary = "건설", description = "요청 BUILD → 알림 BUILT. 건설 결과. 거절이면 isAccept=false [예시 JSON 열기](/docs/notifications/built)")
     @ApiResponse(responseCode = "200", description = "payload",
@@ -73,6 +70,23 @@ public class MessageDocController {
         return new DiceRolledPayload(2, 3, 4);
     }
 
+    @Operation(summary = "게임상태동기화", description = "요청 GAME_STATE_REQUEST → 알림 GAME_STATE_SYNC. 재접속한 요청자에게만 현재 게임 상태 전체를 보낸다. phase는 서버가 기다리는 입력(TurnPhase 이름), finalRank 0은 등수 미정, buildingLevel은 0(땅)~3(호텔), ownerId가 null이면 주인 없음 [예시 JSON 열기](/docs/notifications/game-state-sync)")
+    @ApiResponse(responseCode = "200", description = "payload",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = GameStateSyncPayload.class),
+                    examples = @ExampleObject(value = "{\"gameState\": {\"roomId\": \"r_3\", \"turnNumber\": 12, \"roundNumber\": 3, \"currentPlayerId\": 2, \"welfareFund\": 100000, \"phase\": \"AWAITING_ROLL\", \"isDouble\": false, \"consecutiveDoubleCount\": 0, \"playerOrder\": [1, 2], \"playerStates\": [{\"playerId\": 1, \"nickname\": \"Alice\", \"position\": 8, \"money\": 420000, \"islandTurnsRemaining\": 0, \"isBankrupt\": false, \"finalRank\": 0}, {\"playerId\": 2, \"nickname\": \"Bob\", \"position\": 15, \"money\": 310000, \"islandTurnsRemaining\": 0, \"isBankrupt\": false, \"finalRank\": 0}], \"propertyStates\": [{\"propertyId\": 104, \"ownerId\": 1, \"buildingLevel\": 2}, {\"propertyId\": 105, \"ownerId\": 2, \"buildingLevel\": 0}, {\"propertyId\": 106, \"ownerId\": null, \"buildingLevel\": 0}], \"config\": {\"startMoney\": 500000, \"salaryAmount\": 100000, \"taxAmount\": 100000, \"maxRound\": 30, \"islandTurns\": 3, \"mapId\": 1, \"limitTimeSeconds\": 20}}}")))
+    @GetMapping("/game-state-sync")
+    public GameStateSyncPayload gameStateSync() {
+        return new GameStateSyncPayload(new GameStateSyncPayload.GameSnapshot(
+                "r_3", 12, 3, 2L, 100000L, "AWAITING_ROLL", false, 0,
+                List.of(1L, 2L),
+                List.of(new GameStateSyncPayload.PlayerSnapshot(1L, "Alice", 8, 420000L, 0, false, 0),
+                        new GameStateSyncPayload.PlayerSnapshot(2L, "Bob", 15, 310000L, 0, false, 0)),
+                List.of(new GameStateSyncPayload.PropertySnapshot(104, 1L, 2),
+                        new GameStateSyncPayload.PropertySnapshot(105, 2L, 0),
+                        new GameStateSyncPayload.PropertySnapshot(106, null, 0)),
+                new GameConfig(500000L, 100000L, 100000L, 30, 3, 1, 20)));
+    }
+
     @Operation(summary = "자산매각", description = "요청 SELL_PROPERTIES → 알림 PROPERTIES_SOLD. 매각 결과 [예시 JSON 열기](/docs/notifications/properties-sold)")
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = PropertiesSoldPayload.class),
@@ -100,54 +114,4 @@ public class MessageDocController {
         return new PropertyPurchasedPayload(3, 104, true);
     }
 
-    /** 문서에 나오는 순서 (명세 표 순서). Redoc은 이 순서 그대로 보여 준다. */
-    private static final List<String> DOC_ORDER = List.of(
-            "/docs/requests/build",
-            "/docs/requests/draw-card",
-            "/docs/requests/choose-destination",
-            "/docs/requests/roll-dice",
-            "/docs/requests/sell-properties",
-            "/docs/requests/acquire-property",
-            "/docs/requests/purchase-property",
-            "/docs/notifications/built",
-            "/docs/notifications/card-drawn",
-            "/docs/notifications/destination-chosen",
-            "/docs/notifications/dice-rolled",
-            "/docs/notifications/properties-sold",
-            "/docs/notifications/property-acquired",
-            "/docs/notifications/property-purchased");
-
-    /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
-    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림");
-
-    /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */
-    @Bean
-    public OpenApiCustomizer notificationOrderCustomizer() {
-        return openApi -> {
-            if (openApi.getPaths() == null) {
-                return;
-            }
-            Paths ordered = new Paths();
-            DOC_ORDER.forEach(path -> {
-                if (openApi.getPaths().containsKey(path)) {
-                    ordered.addPathItem(path, openApi.getPaths().get(path));
-                }
-            });
-            openApi.getPaths().forEach((path, item) -> {
-                if (!ordered.containsKey(path)) {
-                    ordered.addPathItem(path, item);
-                }
-            });
-            openApi.setPaths(ordered);
-
-            if (openApi.getTags() != null) {
-                List<io.swagger.v3.oas.models.tags.Tag> tags = new ArrayList<>(openApi.getTags());
-                tags.sort(Comparator.comparingInt(tag -> {
-                    int index = TAG_ORDER.indexOf(tag.getName());
-                    return index < 0 ? TAG_ORDER.size() : index;
-                }));
-                openApi.setTags(tags);
-            }
-        };
-    }
 }

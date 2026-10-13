@@ -27,9 +27,14 @@ public class JwtSecurityConfig {
                 .logout(AbstractHttpConfigurer::disable) // JWT 인증을 사용하므로 세션 기반 로그아웃 끄기
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/docs.html", "/v3/api-docs", "/v3/api-docs/**").permitAll() // Redoc API 문서 화면
+                        .requestMatchers(HttpMethod.GET, "/docs.html", "/v3/api-docs", "/v3/api-docs/**", "/docs/notifications/**").permitAll() // Redoc API 문서 화면
                         .requestMatchers(HttpMethod.GET, "/posts").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/auth/signup",
+                                "/auth/login",
+                                "/auth/email/send",
+                                "/auth/email/verify"
+                        ).permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions

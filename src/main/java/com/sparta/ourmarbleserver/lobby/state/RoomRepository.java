@@ -15,5 +15,8 @@ public interface RoomRepository {
     void deleteById(String roomId);
 
     Optional<String> findRoomIdByPlayerId(long playerId);
+
+    // 새 방 id 발급 (서버가 여러 대여도 겹치지 않아야 한다)
+    String nextRoomId();
 }
 
