@@ -54,6 +54,11 @@ public class GameService {
     private final PropertyTradeService tradeService;
 
     /**
+     * 봇 차례는 사람처럼 제한 시간을 기다리지 않고 이 시간(초) 뒤에 바로 진행한다.
+     */
+    private static final int BOT_DELAY_SECONDS = 3;
+
+    /**
      * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.
      * GameService가 LobbyService를 직접 알면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 알린다.
      * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 기본값은 아무것도 하지 않는다.
@@ -115,11 +120,6 @@ public class GameService {
         boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
         if (running) {
             throw new IllegalStateException("이미 진행 중인 게임이 있는 방입니다: " + roomId);
-        }
-
-        // 봇 로직(8단계)이 생기기 전에는 봇 차례에서 게임이 멈추므로 막는다. 봇 작업 때 이 검증을 지운다.
-        if (!botIds.isEmpty()) {
-            throw new IllegalArgumentException("봇은 아직 지원하지 않습니다." + botIds);
         }
 
         GameState state = new GameState(roomId);
@@ -324,8 +324,12 @@ public class GameService {
      * 속한 진행 중인 게임이 없으면(로비에 있는 사람 등) 빈 값을 돌려준다.
      */
     public synchronized Optional<GameMessage> syncState(long playerId) {
-        return repository.findByPlayerId(playerId)
-                .map(state -> new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state)));
+        return repository.findByPlayerId(playerId).map(state -> {
+            if (timerService != null) {
+                timerService.release(state.getRoomId(), playerId);   // 재접속한 사람은 AFK를 푼다
+            }
+            return new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state));
+        });
     }
 
     // ===== 상태 저장과 게임 종료 =====
@@ -356,8 +360,9 @@ public class GameService {
             timerService.cancel(state.getRoomId());
             return;
         }
+        int seconds = state.currentPlayer().isBot() ? BOT_DELAY_SECONDS : state.getConfig().limitTimeSeconds();
         timerService.start(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
-                state.getPhase(), state.getConfig().limitTimeSeconds());
+                state.getPhase(), seconds);
     }
 
     /**
@@ -403,6 +408,13 @@ public class GameService {
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
         GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
+        if (timerService != null) {
+            // 유저 우선: 사람이 보낸 요청은 거부되더라도 AFK를 풀고, 서버의 대신 진행은 AFK(또는 봇)인 플레이어에게만 실행한다.
+            timerService.release(state.getRoomId(), playerId);
+            if (!timerService.canAutoPlay(state.getRoomId(), playerId, state.getPlayerState(playerId).isBot())) {
+                throw new GameException(GameErrorCode.INVALID_STATE);
+            }
+        }
         if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
             throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }

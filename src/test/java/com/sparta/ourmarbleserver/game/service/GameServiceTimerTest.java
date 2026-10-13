@@ -5,6 +5,7 @@ import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
+import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.scheduler.service.TimerService;
 import org.junit.jupiter.api.Test;
@@ -71,6 +72,62 @@ class GameServiceTimerTest {
 
         assertThat(waitTimeout(700)).isNull();    // 처음 기준 1.2초: 이전 타이머가 남아 있었다면 이미 불렸다
         assertThat(waitTimeout(800)).isEqualTo(new Timeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE));
+    }
+
+    @Test
+    void 봇_차례는_제한_시간_대신_3초_뒤에_시간_초과가_난다() throws Exception {
+        GameService service = newService();
+
+        service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(1L), GameConfig.defaults().withLimitTimeSeconds(20));
+
+        assertThat(waitTimeout(2000)).isNull();   // 2초: 제한 시간(20초)이 아니라 봇 대기 시간(3초)이다
+        assertThat(waitTimeout(2000)).isEqualTo(new Timeout(ROOM, 1L, 1, TurnPhase.AWAITING_ROLL));
+    }
+
+    @Test
+    void 타이머가_울려도_사람이_가만히_있으면_서버가_대신_진행한다() throws Exception {
+        GameService service = newService(1, 2);   // 주사위 1, 2 → 3번 칸(땅 103) 도착
+        BlockingQueue<String> results = new LinkedBlockingQueue<>();
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            service.rollDice(playerId);   // 타이머 스레드의 서버 대신 진행
+            results.add("실행됨");
+        });
+
+        start(service);
+
+        assertThat(results.poll(3, TimeUnit.SECONDS)).isEqualTo("실행됨");
+        assertThat(repository.findById(ROOM).orElseThrow().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
+    }
+
+    @Test
+    void 타이머가_울린_뒤_사람이_먼저_요청을_보내면_서버_대신_진행은_거부된다() throws Exception {
+        GameService service = newService(1, 2);
+        BlockingQueue<String> results = new LinkedBlockingQueue<>();
+        timer.setHandler((roomId, playerId, turnNumber, phase) -> {
+            Thread human = new Thread(() -> {
+                try {
+                    service.drawCard(playerId);   // 사람의 요청: 카드 칸이 아니라서 거부되지만, 사람이 있다는 뜻이라 AFK가 풀린다
+                } catch (GameException ignored) {
+                }
+            });
+            human.start();
+            try {
+                human.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            try {
+                service.rollDice(playerId);   // 서버 대신 진행
+                results.add("실행됨");
+            } catch (GameException e) {
+                results.add("거부됨");
+            }
+        });
+
+        start(service);
+
+        assertThat(results.poll(3, TimeUnit.SECONDS)).isEqualTo("거부됨");
+        assertThat(repository.findById(ROOM).orElseThrow().getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);   // 주사위도 안 굴렸다
     }
 
     @Test

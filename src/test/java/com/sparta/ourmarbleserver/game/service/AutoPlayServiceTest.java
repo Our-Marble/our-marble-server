@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.game.service;
 
+import com.sparta.ourmarbleserver.bot.service.BasicBotStrategy;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
@@ -15,6 +16,9 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
@@ -41,7 +45,8 @@ class AutoPlayServiceTest {
     private GameState start(int... faces) {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
-        autoPlay = new AutoPlayService(service, repository, data, new PropertyService(data), sender, new TimerService());
+        PropertyService propertyService = new PropertyService(data);
+        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService());
         return service.startGame(ROOM, List.of(1L, 2L));
     }
 
@@ -49,6 +54,11 @@ class AutoPlayServiceTest {
     private void waitAt(GameState state, int position, TurnPhase phase) {
         state.getPlayerState(1L).setPosition(position);
         state.setPhase(phase);
+    }
+
+    private void own(GameState state, int propertyId, long ownerId, BuildingLevel level) {
+        state.getPropertyState(propertyId).orElseThrow().setOwnerId(ownerId);
+        state.getPropertyState(propertyId).orElseThrow().setBuildingLevel(level);
     }
 
     @Test
@@ -152,5 +162,138 @@ class AutoPlayServiceTest {
 
         assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
         verifyNoInteractions(sender);
+    }
+
+    // ===== 봇: 사람과 달리 전략이 판단한다 =====
+
+    /** 1번 플레이어를 봇으로 만든다. */
+    private void makeBot(GameState state) {
+        state.getPlayerState(1L).setBot(true);
+    }
+
+    @Test
+    void 봇은_좋은_땅이면_구매한다() {
+        GameState state = start();
+        makeBot(state);
+        waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);   // 독도(수익 비율 1.5), 땅값 20만
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+
+        assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
+        verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTY_PURCHASED), any());
+    }
+
+    @Test
+    void 봇은_현금이_모자라면_구매를_거절한다() {
+        GameState state = start();
+        makeBot(state);
+        state.getPlayerState(1L).setMoney(150_000);
+        waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+
+        assertThat(state.getPropertyState(104).orElseThrow().hasOwner()).isFalse();
+        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
+    }
+
+    @Test
+    void 봇은_회수가_빠른_땅에는_건설한다() {
+        GameState state = start();
+        makeBot(state);
+        own(state, 131, 1L, BuildingLevel.LAND);   // 서울 별장 15만: 통행료 +12.8만
+        waitAt(state, 31, TurnPhase.AWAITING_BUILD);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+
+        assertThat(state.getPropertyState(131).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(350_000);
+    }
+
+    @Test
+    void 봇은_건설_불가_땅에서는_전략에_묻지_않고_거절한다() {
+        GameState state = start();
+        makeBot(state);
+        own(state, 104, 1L, BuildingLevel.LAND);   // 독도: 건설 불가
+        waitAt(state, 4, TurnPhase.AWAITING_BUILD);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+
+        assertThat(state.getPropertyState(104).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
+        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
+    }
+
+    @Test
+    void 봇은_호텔에서는_전략에_묻지_않고_거절한다() {
+        GameState state = start();
+        makeBot(state);
+        own(state, 131, 1L, BuildingLevel.HOTEL);
+        waitAt(state, 31, TurnPhase.AWAITING_BUILD);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+
+        assertThat(state.getPropertyState(131).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.HOTEL);
+        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
+    }
+
+    @Test
+    void 봇은_통행료로_빨리_회수할_땅이면_인수한다() {
+        GameState state = start();
+        makeBot(state);
+        own(state, 104, 2L, BuildingLevel.LAND);   // 독도: 통행료 30만, 인수가 40만
+        state.getPlayerState(1L).setMoney(1_000_000);
+        waitAt(state, 4, TurnPhase.AWAITING_ACQUIRE);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_ACQUIRE);
+
+        assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(600_000);
+    }
+
+    @Test
+    void 봇은_매각할_땅을_전략이_고른다() {
+        GameState state = start();
+        makeBot(state);
+        own(state, 103, 2L, BuildingLevel.BUILDING);   // 통행료 60,000
+        own(state, 101, 1L, BuildingLevel.LAND);       // 매각가 25,000
+        own(state, 106, 1L, BuildingLevel.LAND);       // 매각가 50,000
+        own(state, 131, 1L, BuildingLevel.LAND);       // 매각가 175,000
+        state.getPlayerState(1L).setMoney(10_000);
+        waitAt(state, 3, TurnPhase.AWAITING_SELL);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_SELL);
+
+        // 사람(AFK)이라면 싼 땅부터 101, 106을 팔지만, 봇은 통행료 손실이 적은 서울 하나만 판다
+        assertThat(state.getPropertyState(131).orElseThrow().hasOwner()).isFalse();
+        assertThat(state.getPropertyState(101).orElseThrow().isOwnedBy(1L)).isTrue();
+        assertThat(state.getPropertyState(106).orElseThrow().isOwnedBy(1L)).isTrue();
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(10_000 + 175_000 - 60_000);
+    }
+
+    @Test
+    void 봇은_세계여행_목적지를_전략이_고른다() {
+        GameState state = start();
+        makeBot(state);
+        waitAt(state, 24, TurnPhase.AWAITING_DESTINATION);
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_DESTINATION);
+
+        assertThat(state.getPlayerState(1L).getPosition()).isEqualTo(4);   // 수익 비율이 가장 높은 빈 땅 독도
+        assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
+    }
+
+    @Test
+    void 봇만_있는_게임은_끝까지_진행된다() {
+        GameDataService data = new GameDataService(JsonMapper.builder().build());
+        service = GameTestSupport.newGameService(repository, data, new Random(7));
+        PropertyService propertyService = new PropertyService(data);
+        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService());
+        GameState state = service.startGame(ROOM, List.of(1L, 2L, 3L), Map.of(), Set.of(1L, 2L, 3L));
+
+        for (int i = 0; i < 10_000 && !state.isGameOver(); i++) {
+            autoPlay.onTimeout(ROOM, state.getCurrentPlayerId(), state.getTurnNumber(), state.getPhase());
+        }
+
+        assertThat(state.isGameOver()).isTrue();
     }
 }
