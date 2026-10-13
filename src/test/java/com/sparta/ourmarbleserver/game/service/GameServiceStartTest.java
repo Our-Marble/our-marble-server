@@ -30,13 +30,13 @@ class GameServiceStartTest {
 
 
     @Test
-    void 봇이_있으면_봇_로직이_생기기_전까지_거부된다() {
+    void 봇_정보를_넘기면_그_플레이어가_봇으로_표시된다() {
         GameService service = newService();
 
-        assertThatThrownBy(() -> service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(2L)))
-                .isInstanceOf(IllegalArgumentException.class);
+        GameState state = service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(2L));
 
-        assertThat(repository.findById(ROOM)).isEmpty();
+        assertThat(state.getPlayerState(1L).isBot()).isFalse();
+        assertThat(state.getPlayerState(2L).isBot()).isTrue();
     }
 
     @Test

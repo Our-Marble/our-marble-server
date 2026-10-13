@@ -74,6 +74,16 @@ class GameServiceTimerTest {
     }
 
     @Test
+    void 봇_차례는_제한_시간_대신_3초_뒤에_시간_초과가_난다() throws Exception {
+        GameService service = newService();
+
+        service.startGame(ROOM, List.of(1L, 2L), Map.of(), Set.of(1L), GameConfig.defaults().withLimitTimeSeconds(20));
+
+        assertThat(waitTimeout(2000)).isNull();   // 2초: 제한 시간(20초)이 아니라 봇 대기 시간(3초)이다
+        assertThat(waitTimeout(2000)).isEqualTo(new Timeout(ROOM, 1L, 1, TurnPhase.AWAITING_ROLL));
+    }
+
+    @Test
     void 턴이_넘어가면_다음_플레이어의_타이머가_시작된다() throws Exception {
         GameService service = newService(1, 2);
         start(service);
