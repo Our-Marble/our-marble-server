@@ -9,7 +9,7 @@ import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -194,11 +194,11 @@ class GameServiceCardTest {
 
         assertThatThrownBy(() -> service.drawCard(2L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.NOT_YOUR_TURN));
+                        e -> assertThat(e.code()).isEqualTo(GameErrorCode.NOT_YOUR_TURN));
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
         assertThatThrownBy(() -> service.drawCard(1L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
+                        e -> assertThat(e.code()).isEqualTo(GameErrorCode.INVALID_STATE));
     }
 }

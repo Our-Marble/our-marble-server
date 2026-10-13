@@ -1,7 +1,7 @@
 package com.sparta.ourmarbleserver.global.transport;
 
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
@@ -65,7 +65,7 @@ class LobbyMessageHandlerTest {
     void 방_번호_없이_입장하면_INVALID_MESSAGE() {
         assertThatThrownBy(() -> handler.handle(MessageType.ENTER_ROOM, 1L, objectMapper.createObjectNode()))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_MESSAGE));
+                        e -> assertThat(e.code()).isEqualTo(CommonErrorCode.INVALID_MESSAGE));
         verify(lobbyService, never()).join(anyString(), eq(1L));
     }
 }

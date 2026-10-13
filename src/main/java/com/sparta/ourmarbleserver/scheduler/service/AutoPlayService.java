@@ -7,7 +7,7 @@ import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
@@ -54,7 +54,7 @@ public class AutoPlayService implements TimerService.Handler {
 
     private GameResult play(long playerId, TurnPhase phase) {
         GameState state = repository.findByPlayerId(playerId)
-                .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+                .orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
         PlayerState player = state.getPlayerState(playerId);
 
         return switch (phase) {
@@ -72,7 +72,7 @@ public class AutoPlayService implements TimerService.Handler {
     private int propertyIdUnder(PlayerState player) {
         TileData tile = gameDataService.getTiles().get(player.getPosition());
         if (tile.propertyId() == null) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
         return tile.propertyId();
     }
@@ -81,7 +81,7 @@ public class AutoPlayService implements TimerService.Handler {
     /** 통행료를 낼 수 있을 때까지, 매각가가 싼 땅부터 고른다. */
     private List<Integer> chooseSellProperties(GameState state, PlayerState player) {
         PropertyState tollProperty = state.getPropertyState(propertyIdUnder(player))
-                .orElseThrow(() -> new GameException(ErrorCode.INVALID_PROPERTY));
+                .orElseThrow(() -> new GameException(GameErrorCode.INVALID_PROPERTY));
         long toll = propertyService.getToll(tollProperty);
 
         List<PropertyState> mine = state.properties().stream()

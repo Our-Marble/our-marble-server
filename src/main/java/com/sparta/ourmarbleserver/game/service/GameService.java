@@ -6,7 +6,7 @@ import com.sparta.ourmarbleserver.game.dto.*;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
@@ -275,11 +275,11 @@ public class GameService {
         PlayerState player = state.getPlayerState(playerId);
 
         if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
 
         if ("WORLD_TRAVEL".equals(tileAt(destinationPosition).type())) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
+            throw new GameException(GameErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
         }
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN, new DestinationChosenPayload(playerId, destinationPosition));
@@ -402,18 +402,18 @@ public class GameService {
      * → 요청이 현재 phase에 맞는지. 상태를 바꾸기 전에 호출하므로 실패해도 상태는 그대로다.
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
-        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
         if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
         if (state.getCurrentPlayerId() != playerId) {
-            throw new GameException(ErrorCode.NOT_YOUR_TURN);
+            throw new GameException(GameErrorCode.NOT_YOUR_TURN);
         }
         if (state.getPlayerState(playerId).isBankrupt()) {
-            throw new GameException(ErrorCode.PLAYER_BANKRUPT);
+            throw new GameException(GameErrorCode.PLAYER_BANKRUPT);
         }
         if (state.getPhase() != requiredPhase) {
-            throw new GameException(ErrorCode.INVALID_STATE);
+            throw new GameException(GameErrorCode.INVALID_STATE);
         }
         return state;
     }

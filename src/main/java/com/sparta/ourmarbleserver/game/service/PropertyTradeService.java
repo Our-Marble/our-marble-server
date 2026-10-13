@@ -7,7 +7,7 @@ import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.PropertyState;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import lombok.RequiredArgsConstructor;
@@ -42,11 +42,11 @@ class PropertyTradeService {
 
         PropertyState property = state.getPropertyState(propertyId).orElseThrow();
         if (property.hasOwner()) {
-            throw new GameException(ErrorCode.ALREADY_OWNED);
+            throw new GameException(GameErrorCode.ALREADY_OWNED);
         }
         long price = propertyService.getLandPrice(propertyId);
         if (player.getMoney() < price) {
-            throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            throw new GameException(GameErrorCode.NOT_ENOUGH_MONEY);
         }
 
         economyService.charge(player, price);
@@ -66,18 +66,18 @@ class PropertyTradeService {
 
         PropertyState property = state.getPropertyState(propertyId).orElseThrow();
         if (!property.isOwnedBy(player.getPlayerId())) {
-            throw new GameException(ErrorCode.NOT_OWNER);
+            throw new GameException(GameErrorCode.NOT_OWNER);
         }
         if (!propertyService.canBuild(propertyId)) {
-            throw new GameException(ErrorCode.CANNOT_BUILD);
+            throw new GameException(GameErrorCode.CANNOT_BUILD);
         }
         if (property.getBuildingLevel() == BuildingLevel.HOTEL) {
-            throw new GameException(ErrorCode.MAX_LEVEL);
+            throw new GameException(GameErrorCode.MAX_LEVEL);
         }
         BuildingLevel nextLevel = BuildingLevel.fromIndex(property.getBuildingLevel().index() + 1);
         long cost = propertyService.getBuildCost(propertyId, nextLevel);
         if (player.getMoney() < cost) {
-            throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            throw new GameException(GameErrorCode.NOT_ENOUGH_MONEY);
         }
 
         economyService.charge(player, cost);
@@ -97,11 +97,11 @@ class PropertyTradeService {
 
         PropertyState property = state.getPropertyState(propertyId).orElseThrow();
         if (!property.hasOwner() || property.isOwnedBy(player.getPlayerId())) {
-            throw new GameException(ErrorCode.CANNOT_ACQUIRE);
+            throw new GameException(GameErrorCode.CANNOT_ACQUIRE);
         }
         long price = propertyService.getAcquireValue(property);
         if (player.getMoney() < price) {
-            throw new GameException(ErrorCode.NOT_ENOUGH_MONEY);
+            throw new GameException(GameErrorCode.NOT_ENOUGH_MONEY);
         }
 
         economyService.transfer(player, state.getPlayerState(property.getOwnerId()), price);
@@ -117,14 +117,14 @@ class PropertyTradeService {
         if (propertyIds == null || propertyIds.isEmpty()
                 || propertyIds.stream().anyMatch(Objects::isNull)
                 || new HashSet<>(propertyIds).size() != propertyIds.size()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY_LIST);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY_LIST);
         }
         List<PropertyState> selected = new ArrayList<>();
         for (int propertyId : propertyIds) {
             PropertyState property = state.getPropertyState(propertyId)
-                    .orElseThrow(() -> new GameException(ErrorCode.INVALID_PROPERTY));
+                    .orElseThrow(() -> new GameException(GameErrorCode.INVALID_PROPERTY));
             if (!property.isOwnedBy(payer.getPlayerId())) {
-                throw new GameException(ErrorCode.NOT_OWNER);
+                throw new GameException(GameErrorCode.NOT_OWNER);
             }
             selected.add(property);
         }
@@ -133,7 +133,7 @@ class PropertyTradeService {
         long toll = propertyService.getToll(tollProperty);
         long proceeds = selected.stream().mapToLong(propertyService::getSellValue).sum();
         if (payer.getMoney() + proceeds < toll) {
-            throw new GameException(ErrorCode.NOT_ENOUGH_SELL);
+            throw new GameException(GameErrorCode.NOT_ENOUGH_SELL);
         }
 
         // 검증이 모두 끝났으니 상태를 바꾼다
@@ -148,12 +148,12 @@ class PropertyTradeService {
     private PropertyState findTollProperty(GameState state, PlayerState payer) {
         TileData tile = tileAt(payer.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null) {
-            throw new GameException(ErrorCode.INVALID_STATE);
+            throw new GameException(GameErrorCode.INVALID_STATE);
         }
         PropertyState property = state.getPropertyState(tile.propertyId())
-                .orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+                .orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
         if (!property.hasOwner() || property.isOwnedBy(payer.getPlayerId())) {
-            throw new GameException(ErrorCode.INVALID_STATE);
+            throw new GameException(GameErrorCode.INVALID_STATE);
         }
         return property;
     }
@@ -164,7 +164,7 @@ class PropertyTradeService {
     private void requireStandingOn(PlayerState player, int propertyId) {
         TileData tile = tileAt(player.getPosition());
         if (!"PROPERTY".equals(tile.type()) || tile.propertyId() == null || tile.propertyId() != propertyId) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
     }
 

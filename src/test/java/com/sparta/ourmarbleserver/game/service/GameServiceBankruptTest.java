@@ -3,7 +3,7 @@ package com.sparta.ourmarbleserver.game.service;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
@@ -135,6 +135,6 @@ class GameServiceBankruptTest {
 
         assertThatThrownBy(() -> service.rollDice(1L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
+                        e -> assertThat(e.code()).isEqualTo(GameErrorCode.INVALID_STATE));
     }
 }

@@ -5,6 +5,7 @@ import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
@@ -119,7 +120,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         state().getPlayerState(1L).setMoney(49_999);
 
-        assertRejected(() -> service.build(1L, PROPERTY_ID, true), ErrorCode.NOT_ENOUGH_MONEY);
+        assertRejected(() -> service.build(1L, PROPERTY_ID, true), GameErrorCode.NOT_ENOUGH_MONEY);
 
         assertThat(property(PROPERTY_ID).getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(49_999);
@@ -141,7 +142,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(PROPERTY_ID).setBuildingLevel(BuildingLevel.HOTEL);
 
-        assertRejected(() -> service.build(1L, PROPERTY_ID, true), ErrorCode.MAX_LEVEL);
+        assertRejected(() -> service.build(1L, PROPERTY_ID, true), GameErrorCode.MAX_LEVEL);
     }
 
     @Test
@@ -150,7 +151,7 @@ class GameServiceBuildTest {
         state().getPlayerState(1L).setPosition(4);   // 독도 (건설 불가)
         property(104).setOwnerId(1L);
 
-        assertRejected(() -> service.build(1L, 104, true), ErrorCode.CANNOT_BUILD);
+        assertRejected(() -> service.build(1L, 104, true), GameErrorCode.CANNOT_BUILD);
     }
 
     @Test
@@ -158,7 +159,7 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(PROPERTY_ID).setOwnerId(2L);
 
-        assertRejected(() -> service.build(1L, PROPERTY_ID, true), ErrorCode.NOT_OWNER);
+        assertRejected(() -> service.build(1L, PROPERTY_ID, true), GameErrorCode.NOT_OWNER);
     }
 
     @Test
@@ -166,23 +167,23 @@ class GameServiceBuildTest {
         GameService service = newService();
         property(104).setOwnerId(1L);
 
-        assertRejected(() -> service.build(1L, 104, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.build(1L, 104, true), GameErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 없는_땅_번호면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.build(1L, 999, true), ErrorCode.INVALID_PROPERTY);
+        assertRejected(() -> service.build(1L, 999, true), GameErrorCode.INVALID_PROPERTY);
     }
 
     @Test
     void 내_차례가_아니거나_건설을_고를_phase가_아니면_거부된다() {
         GameService service = newService();
 
-        assertRejected(() -> service.build(2L, PROPERTY_ID, true), ErrorCode.NOT_YOUR_TURN);
+        assertRejected(() -> service.build(2L, PROPERTY_ID, true), GameErrorCode.NOT_YOUR_TURN);
 
         state().setPhase(TurnPhase.AWAITING_ROLL);
-        assertRejected(() -> service.build(1L, PROPERTY_ID, true), ErrorCode.INVALID_STATE);
+        assertRejected(() -> service.build(1L, PROPERTY_ID, true), GameErrorCode.INVALID_STATE);
     }
 }
