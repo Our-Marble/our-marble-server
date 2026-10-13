@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 서버 메모리에 방 상태를 보관하는 구현.
@@ -19,6 +20,8 @@ public class InMemoryRoomRepository implements RoomRepository {
 
     // 방마다 지난번 save 때 색인에 올린 멤버. 나간 사람을 찾아 색인에서 빼는 데 쓴다.
     private final Map<String, Set<Long>> indexedMembers = new HashMap<>();
+
+    private final AtomicLong roomSequence = new AtomicLong();
 
     @Override
     public Optional<Room> findById(String roomId) {
@@ -45,6 +48,11 @@ public class InMemoryRoomRepository implements RoomRepository {
     @Override
     public synchronized Optional<String> findRoomIdByPlayerId(long playerId) {
         return Optional.ofNullable(roomIdByPlayer.get(playerId));
+    }
+
+    @Override
+    public String nextRoomId() {
+        return "r_" + roomSequence.incrementAndGet();
     }
 
     /** 이 방의 색인을 현재 멤버에 맞춘다. 빠진 사람은 지우고, 새로 온 사람은 더한다. */

@@ -92,4 +92,9 @@ class InMemoryRoomRepositoryTest {
 
         assertThat(repository.findAll()).isEmpty();
     }
+
+    @Test
+    void 방_id는_매번_다르게_발급된다() {
+        assertThat(repository.nextRoomId()).isNotEqualTo(repository.nextRoomId());
+    }
 }

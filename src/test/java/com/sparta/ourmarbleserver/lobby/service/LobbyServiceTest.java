@@ -9,10 +9,7 @@ import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
-import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
-import com.sparta.ourmarbleserver.lobby.dto.RoomPlayer;
-import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
-import com.sparta.ourmarbleserver.lobby.dto.RoomUpdatedPayload;
+import com.sparta.ourmarbleserver.lobby.dto.*;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -559,4 +556,25 @@ class LobbyServiceTest {
     void 없는_방의_ROOM_UPDATED는_ROOM_NOT_FOUND() {
         assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.roomUpdated("r_없음"));
     }
+
+    @Test
+    void 방_목록에는_대기_중인_방의_요약이_담긴다() {
+        RoomInfo room = service.createRoom(HOST);
+        service.join(room.roomId(), P2);
+
+        assertThat(service.roomList().rooms()).containsExactly(
+                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2));
+    }
+
+    @Test
+    void 방을_나가면_플레이어로_방을_찾을_수_없다() {
+        RoomInfo room = service.createRoom(HOST);
+        service.join(room.roomId(), P2);
+
+        service.leave(room.roomId(), P2);
+
+        assertThat(service.roomIdOf(HOST)).isEqualTo(room.roomId());
+        assertError(ErrorCode.NOT_IN_ROOM, () -> service.roomIdOf(P2));
+    }
+
 }
