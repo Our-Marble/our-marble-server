@@ -29,7 +29,12 @@ public class JwtSecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/docs.html", "/v3/api-docs", "/v3/api-docs/**", "/docs/notifications/**").permitAll() // Redoc API 문서 화면
                         .requestMatchers(HttpMethod.GET, "/posts").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/signup", "/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/auth/signup",
+                                "/auth/login",
+                                "/auth/email/send",
+                                "/auth/email/verify"
+                        ).permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
