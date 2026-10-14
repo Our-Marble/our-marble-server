@@ -720,4 +720,59 @@ class LobbyServiceTest {
 
         assertThat(gameService.config).isEqualTo(GameConfig.defaults().withMapId(MAP));
     }
+
+    // ===== 방장의 게임 설정 변경 =====
+
+    /** 기본값과 모두 다른 설정. 바뀐 값을 확인하기 쉽다. */
+    private static final GameConfig NEW_CONFIG = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+
+    @Test
+    void 방장이_설정을_바꾸면_ROOM_UPDATED에_반영된다() {
+        RoomInfo room = roomWithTwo();
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.config()).isEqualTo(NEW_CONFIG);
+        assertThat(snapshot.mapId()).isEqualTo(3);
+    }
+
+    @Test
+    void 설정을_바꿔도_최대_인원은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 3);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+
+        assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(3);
+    }
+
+    @Test
+    void 바꾼_설정으로_게임을_시작한다() {
+        RoomInfo room = roomWithTwo();
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(NEW_CONFIG);
+    }
+
+    @Test
+    void 방장이_아니거나_시작한_방이거나_없는_방이면_설정을_바꿀_수_없다() {
+        RoomInfo room = roomWithTwo();
+        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG));
+
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG));
+    }
+
+    @Test
+    void 설정이_없으면_INVALID_STATE이고_방은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null));
+        assertThat(service.roomUpdated(room.roomId()).room().config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
+    }
 }

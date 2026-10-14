@@ -12,6 +12,9 @@ import java.util.List;
  *             "players": [ { "playerId": 1, "nickname": "Alice", "ready": true } ] } }
  * </pre>
  * players의 순서가 참가 순서이고, 게임 시작 시 턴 순서가 된다. 방장은 항상 ready=true다.
+ *
+ * 방장이 게임 설정을 바꿀 때는 클라가 이 payload를 ROOM_UPDATED 타입 요청으로 보낸다.
+ * 서버는 room.config만 읽고 나머지 값은 무시한다.
  */
 public record RoomUpdatedPayload(RoomSnapshot room) {
 
