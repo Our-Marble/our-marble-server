@@ -645,4 +645,23 @@ class LobbyServiceTest {
                 .extracting(RoomPlayer::playerId, RoomPlayer::ready)
                 .containsExactly(Tuple.tuple(HOST, true), Tuple.tuple(-1L, true), Tuple.tuple(P2, false));
     }
+
+    // ===== 방 이름과 기본 설정 =====
+
+    @Test
+    void 방을_만들면_방장_닉네임의_기본_이름이_붙는다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        assertThat(repository.findById(room.roomId()).orElseThrow().getRoomName()).isEqualTo("닉1의 방");
+    }
+
+    @Test
+    void 방을_만들면_기본_설정에_방의_맵_번호가_들어간다() {
+        RoomInfo room = service.createRoom(HOST, 3, 4);
+
+        Room saved = repository.findById(room.roomId()).orElseThrow();
+        assertThat(saved.getConfig()).isEqualTo(GameConfig.defaults().withMapId(3));
+        assertThat(saved.getMapId()).isEqualTo(3);
+        assertThat(room.mapId()).isEqualTo(3);
+    }
 }

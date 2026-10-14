@@ -58,6 +58,7 @@ public class LobbyService {
         Room room = new Room(repository.nextRoomId(), playerId, mapId, maxPlayers);
         room.addMember(playerId, true);
         room.setNickname(playerId, nicknameOf(playerId));
+        room.setRoomName(room.nicknameOf(playerId)+"의 방"); // 방장이 바꾸기 전의 기본 이름
         repository.save(room);
         return toInfo(room);
     }
