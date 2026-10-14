@@ -74,7 +74,7 @@ public class LobbyService {
         List<RoomListPayload.RoomSummary> rooms = repository.findAll().stream()
                 .filter(room -> room.getStatus() == RoomStatus.WAITING)
                 .map(room -> new RoomListPayload.RoomSummary(
-                        room.getRoomId(), room.nicknameOf(room.getHostId()), room.getMapId(), room.size()))
+                        room.getRoomId(), room.nicknameOf(room.getHostId()), room.getMapId(), room.size(), room.getMaxPlayers()))
                 .toList();
         return new RoomListPayload(rooms);
     }

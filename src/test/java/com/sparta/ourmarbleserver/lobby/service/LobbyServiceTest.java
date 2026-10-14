@@ -564,7 +564,7 @@ class LobbyServiceTest {
         service.join(room.roomId(), P2);
 
         assertThat(service.roomList().rooms()).containsExactly(
-                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2));
+                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2, 4));
     }
 
     @Test
