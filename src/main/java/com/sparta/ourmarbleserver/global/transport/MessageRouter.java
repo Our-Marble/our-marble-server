@@ -1,7 +1,7 @@
 package com.sparta.ourmarbleserver.global.transport;
 
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import org.springframework.stereotype.Component;
 
@@ -34,7 +34,7 @@ public class MessageRouter {
     public void route(long playerId, InboundMessage message) {
         WsMessageHandler handler = handlers.get(message.type());
         if (handler == null) {
-            throw new GameException(ErrorCode.INVALID_MESSAGE);
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
         }
         handler.handle(message.type(), playerId, message.body());
     }

@@ -6,7 +6,7 @@ import com.sparta.ourmarbleserver.game.dto.*;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.property.dto.BuiltPayload;
 import com.sparta.ourmarbleserver.property.dto.PropertiesSoldPayload;
@@ -52,6 +52,11 @@ public class GameService {
     private final ArrivalService arrivalService;
     private final CardService cardService;
     private final PropertyTradeService tradeService;
+
+    /**
+     * 봇 차례는 사람처럼 제한 시간을 기다리지 않고 이 시간(초) 뒤에 바로 진행한다.
+     */
+    private static final int BOT_DELAY_SECONDS = 3;
 
     /**
      * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.
@@ -115,11 +120,6 @@ public class GameService {
         boolean running = repository.findById(roomId).filter(existing -> !existing.isGameOver()).isPresent();
         if (running) {
             throw new IllegalStateException("이미 진행 중인 게임이 있는 방입니다: " + roomId);
-        }
-
-        // 봇 로직(8단계)이 생기기 전에는 봇 차례에서 게임이 멈추므로 막는다. 봇 작업 때 이 검증을 지운다.
-        if (!botIds.isEmpty()) {
-            throw new IllegalArgumentException("봇은 아직 지원하지 않습니다." + botIds);
         }
 
         GameState state = new GameState(roomId);
@@ -275,11 +275,11 @@ public class GameService {
         PlayerState player = state.getPlayerState(playerId);
 
         if (destinationPosition < 0 || destinationPosition >= moveService.getTileCount()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
 
         if ("WORLD_TRAVEL".equals(tileAt(destinationPosition).type())) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
+            throw new GameException(GameErrorCode.INVALID_PROPERTY); //세계여행 캰은 목적지로 고를 수 없다.
         }
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN, new DestinationChosenPayload(playerId, destinationPosition));
@@ -324,8 +324,12 @@ public class GameService {
      * 속한 진행 중인 게임이 없으면(로비에 있는 사람 등) 빈 값을 돌려준다.
      */
     public synchronized Optional<GameMessage> syncState(long playerId) {
-        return repository.findByPlayerId(playerId)
-                .map(state -> new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state)));
+        return repository.findByPlayerId(playerId).map(state -> {
+            if (timerService != null) {
+                timerService.release(state.getRoomId(), playerId);   // 재접속한 사람은 AFK를 푼다
+            }
+            return new GameMessage(MessageType.GAME_STATE_SYNC, GameStateSyncPayload.from(state));
+        });
     }
 
     // ===== 상태 저장과 게임 종료 =====
@@ -354,6 +358,11 @@ public class GameService {
         }
         if (state.isGameOver()) {
             timerService.cancel(state.getRoomId());
+            return;
+        }
+        if (state.currentPlayer().isBot()) {
+            timerService.startBot(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
+                    state.getPhase(), BOT_DELAY_SECONDS);
             return;
         }
         timerService.start(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
@@ -402,18 +411,25 @@ public class GameService {
      * → 요청이 현재 phase에 맞는지. 상태를 바꾸기 전에 호출하므로 실패해도 상태는 그대로다.
      */
     private GameState validate(long playerId, TurnPhase requiredPhase, Integer propertyId) {
-        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(ErrorCode.INVALID_STATE));
+        GameState state = repository.findByPlayerId(playerId).orElseThrow(() -> new GameException(GameErrorCode.INVALID_STATE));
+        if (timerService != null) {
+            // 유저 우선: 사람이 보낸 요청은 거부되더라도 AFK를 풀고, 서버의 대신 진행은 AFK(또는 봇)인 플레이어에게만 실행한다.
+            timerService.release(state.getRoomId(), playerId);
+            if (!timerService.canAutoPlay(state.getRoomId(), playerId, state.getPlayerState(playerId).isBot())) {
+                throw new GameException(GameErrorCode.INVALID_STATE);
+            }
+        }
         if (propertyId != null && state.getPropertyState(propertyId).isEmpty()) {
-            throw new GameException(ErrorCode.INVALID_PROPERTY);
+            throw new GameException(GameErrorCode.INVALID_PROPERTY);
         }
         if (state.getCurrentPlayerId() != playerId) {
-            throw new GameException(ErrorCode.NOT_YOUR_TURN);
+            throw new GameException(GameErrorCode.NOT_YOUR_TURN);
         }
         if (state.getPlayerState(playerId).isBankrupt()) {
-            throw new GameException(ErrorCode.PLAYER_BANKRUPT);
+            throw new GameException(GameErrorCode.PLAYER_BANKRUPT);
         }
         if (state.getPhase() != requiredPhase) {
-            throw new GameException(ErrorCode.INVALID_STATE);
+            throw new GameException(GameErrorCode.INVALID_STATE);
         }
         return state;
     }

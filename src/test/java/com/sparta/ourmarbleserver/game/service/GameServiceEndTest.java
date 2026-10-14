@@ -3,7 +3,7 @@ package com.sparta.ourmarbleserver.game.service;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.state.*;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -186,7 +186,7 @@ class GameServiceEndTest {
         assertThat(repository.findById(ROOM)).isEmpty();
         assertThatThrownBy(() -> service.rollDice(2L))
                 .isInstanceOfSatisfying(GameException.class,
-                        e -> assertThat(e.code()).isEqualTo(ErrorCode.INVALID_STATE));
+                        e -> assertThat(e.code()).isEqualTo(GameErrorCode.INVALID_STATE));
 
         service.startGame(ROOM, List.of(1L, 2L));   // 로비가 같은 방에서 새 게임을 시작할 수 있다
         assertThat(repository.findById(ROOM)).isPresent();

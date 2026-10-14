@@ -9,6 +9,7 @@ import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.*;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import org.junit.jupiter.api.Test;
@@ -110,15 +111,15 @@ class LobbyServiceTest {
 
     @Test
     void 최대_인원이_2에서_4가_아니면_거부한다() {
-        assertError(ErrorCode.INVALID_STATE, () -> service.createRoom(HOST, MAP, 1));
-        assertError(ErrorCode.INVALID_STATE, () -> service.createRoom(HOST, MAP, 5));
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.createRoom(HOST, MAP, 1));
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.createRoom(HOST, MAP, 5));
     }
 
     @Test
     void 이미_대기_중인_방에_있으면_방을_만들_수_없다() {
         service.createRoom(HOST, MAP, 4);
 
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
     }
 
     @Test
@@ -134,7 +135,7 @@ class LobbyServiceTest {
 
     @Test
     void 없는_방을_조회하면_ROOM_NOT_FOUND() {
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom("없는방"));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.getRoom("없는방"));
     }
 
     // ===== 참가 =====
@@ -155,14 +156,14 @@ class LobbyServiceTest {
         RoomInfo room = service.createRoom(HOST, MAP, 2);
         service.join(room.roomId(), P2);
 
-        assertError(ErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
+        assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
     }
 
     @Test
     void 같은_방에_두_번_참가할_수_없다() {
         RoomInfo room = roomWithTwo();
 
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.join(room.roomId(), P2));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.join(room.roomId(), P2));
     }
 
     @Test
@@ -170,7 +171,7 @@ class LobbyServiceTest {
         RoomInfo first = service.createRoom(HOST, MAP, 4);
         RoomInfo second = service.createRoom(P2, MAP, 4);
 
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.join(second.roomId(), HOST));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.join(second.roomId(), HOST));
         assertThat(service.getRoom(first.roomId()).players()).hasSize(1);
     }
 
@@ -180,12 +181,12 @@ class LobbyServiceTest {
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
 
-        assertError(ErrorCode.ROOM_ALREADY_STARTED, () -> service.join(room.roomId(), P3));
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.join(room.roomId(), P3));
     }
 
     @Test
     void 없는_방에_참가하면_ROOM_NOT_FOUND() {
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.join("없는방", P2));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.join("없는방", P2));
     }
 
     // ===== 나가기 =====
@@ -218,7 +219,7 @@ class LobbyServiceTest {
 
         service.leave(room.roomId(), HOST);
 
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
         assertThat(service.listRooms()).isEmpty();
     }
 
@@ -236,7 +237,7 @@ class LobbyServiceTest {
     void 참가하지_않은_방에서_나가면_NOT_IN_ROOM() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.leave(room.roomId(), P2));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.leave(room.roomId(), P2));
     }
 
     @Test
@@ -245,7 +246,7 @@ class LobbyServiceTest {
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
 
-        assertError(ErrorCode.ROOM_ALREADY_STARTED, () -> service.leave(room.roomId(), P2));
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.leave(room.roomId(), P2));
     }
 
     // ===== 준비 =====
@@ -265,14 +266,14 @@ class LobbyServiceTest {
     void 방장은_준비_상태를_바꿀_수_없다() {
         RoomInfo room = roomWithTwo();
 
-        assertError(ErrorCode.INVALID_STATE, () -> service.setReady(room.roomId(), HOST, false));
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setReady(room.roomId(), HOST, false));
     }
 
     @Test
     void 참가하지_않았으면_준비할_수_없다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.setReady(room.roomId(), P2, true));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.setReady(room.roomId(), P2, true));
     }
 
     // ===== 시작 =====
@@ -297,7 +298,7 @@ class LobbyServiceTest {
         RoomInfo room = roomWithTwo();
         service.setReady(room.roomId(), P2, true);
 
-        assertError(ErrorCode.NOT_HOST, () -> service.start(room.roomId(), P2));
+        assertError(LobbyErrorCode.NOT_HOST, () -> service.start(room.roomId(), P2));
         assertThat(gameService.callCount).isZero();
     }
 
@@ -305,7 +306,7 @@ class LobbyServiceTest {
     void 혼자서는_시작할_수_없다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(ErrorCode.NOT_ENOUGH_PLAYERS, () -> service.start(room.roomId(), HOST));
+        assertError(LobbyErrorCode.NOT_ENOUGH_PLAYERS, () -> service.start(room.roomId(), HOST));
         assertThat(gameService.callCount).isZero();
     }
 
@@ -313,7 +314,7 @@ class LobbyServiceTest {
     void 준비하지_않은_사람이_있으면_시작할_수_없다() {
         RoomInfo room = roomWithTwo();
 
-        assertError(ErrorCode.NOT_ALL_READY, () -> service.start(room.roomId(), HOST));
+        assertError(LobbyErrorCode.NOT_ALL_READY, () -> service.start(room.roomId(), HOST));
         assertThat(service.getRoom(room.roomId()).status()).isEqualTo(RoomStatus.WAITING);
         assertThat(gameService.callCount).isZero();
     }
@@ -324,7 +325,7 @@ class LobbyServiceTest {
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
 
-        assertError(ErrorCode.ROOM_ALREADY_STARTED, () -> service.start(room.roomId(), HOST));
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.start(room.roomId(), HOST));
         assertThat(gameService.callCount).isEqualTo(1);
     }
 
@@ -349,7 +350,7 @@ class LobbyServiceTest {
         service.deleteRoom(room.roomId());
 
         assertThat(service.listRooms()).isEmpty();
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
     }
 
     @Test
@@ -360,18 +361,18 @@ class LobbyServiceTest {
 
         service.deleteRoom(room.roomId());
 
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.getRoom(room.roomId()));
     }
 
     @Test
     void 없는_방을_삭제하면_ROOM_NOT_FOUND() {
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.deleteRoom("r_없음"));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.deleteRoom("r_없음"));
     }
 
     @Test
     void 방이_삭제되면_참가자가_새_방을_만들_수_있다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
 
         service.deleteRoom(room.roomId());
 
@@ -407,7 +408,7 @@ class LobbyServiceTest {
     void 어느_방에도_없으면_NOT_IN_ROOM() {
         service.createRoom(HOST, MAP, 4);
 
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
     }
 
     @Test
@@ -415,10 +416,10 @@ class LobbyServiceTest {
         RoomInfo room = roomWithTwo();
 
         service.leave(room.roomId(), P2);
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(P2));
 
         service.deleteRoom(room.roomId());
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(HOST));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(HOST));
     }
 
     @Test
@@ -437,8 +438,8 @@ class LobbyServiceTest {
         service.start(started.roomId(), HOST);
         RoomInfo other = service.createRoom(P3, MAP, 4);
 
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
-        assertError(ErrorCode.ALREADY_IN_ROOM, () -> service.join(other.roomId(), P2));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.createRoom(HOST, MAP, 4));
+        assertError(LobbyErrorCode.ALREADY_IN_ROOM, () -> service.join(other.roomId(), P2));
     }
 
     // ===== 게임 종료 =====
@@ -480,7 +481,7 @@ class LobbyServiceTest {
         RoomInfo room = startedRoom();
         service.onGameEnded(new GameEndedEvent(room.roomId()));
 
-        assertError(ErrorCode.NOT_ALL_READY, () -> service.start(room.roomId(), HOST));
+        assertError(LobbyErrorCode.NOT_ALL_READY, () -> service.start(room.roomId(), HOST));
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
 
@@ -554,7 +555,7 @@ class LobbyServiceTest {
 
     @Test
     void 없는_방의_ROOM_UPDATED는_ROOM_NOT_FOUND() {
-        assertError(ErrorCode.ROOM_NOT_FOUND, () -> service.roomUpdated("r_없음"));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.roomUpdated("r_없음"));
     }
 
     @Test
@@ -563,7 +564,7 @@ class LobbyServiceTest {
         service.join(room.roomId(), P2);
 
         assertThat(service.roomList().rooms()).containsExactly(
-                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2));
+                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2, 4));
     }
 
     @Test
@@ -574,7 +575,7 @@ class LobbyServiceTest {
         service.leave(room.roomId(), P2);
 
         assertThat(service.roomIdOf(HOST)).isEqualTo(room.roomId());
-        assertError(ErrorCode.NOT_IN_ROOM, () -> service.roomIdOf(P2));
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.roomIdOf(P2));
     }
 
 }

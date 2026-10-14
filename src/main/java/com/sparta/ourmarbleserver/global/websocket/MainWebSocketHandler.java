@@ -2,13 +2,11 @@ package com.sparta.ourmarbleserver.global.websocket;
 
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ConnectedPayload;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
-import com.sparta.ourmarbleserver.global.protocol.ErrorPayload;
-import com.sparta.ourmarbleserver.global.protocol.MessageType;
+import com.sparta.ourmarbleserver.global.protocol.*;
 import com.sparta.ourmarbleserver.global.transport.InboundMessage;
 import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRouter;
+import com.sparta.ourmarbleserver.lobby.dto.GameStartedPayload;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,8 +59,17 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         }
 
         sessionRegistry.register(playerId, session);    // 등록 먼저
-        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, nickname));
-        sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList());
+
+        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, nickname)); // 연결 완료 알림
+
+        // 게임이 끝나 대기방으로 돌아간 방에 남아 있었다면 정리하고 로비로 보낸다
+        lobbyService.leaveWaitingRoom(playerId)
+                .ifPresent(roomId -> sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId)));
+
+        // 게임 중인 방에 있으면 게임 화면으로, 아니면 로비 목록
+        lobbyService.playingRoomIdOf(playerId).ifPresentOrElse(
+                roomId -> sender.sendToPlayer(playerId, MessageType.GAME_STARTED, new GameStartedPayload(roomId)),
+                () -> sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList()));
     }
 
     @Override
@@ -78,7 +85,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         } catch (JacksonException e) {
             // 핸들러가 body를 요청 DTO로 바꾸다 실패 (필드 타입이 틀림 등)
             log.info("[WS] 본문 해석 실패: player={} message={}", playerId, message.getPayload());
-            sendError(playerId, ErrorCode.INVALID_MESSAGE);
+            sendError(playerId, CommonErrorCode.INVALID_MESSAGE);
         } catch (RuntimeException e) {
             // 예상 못 한 서버 오류. 연결은 유지하고 로그만 남긴다.
             log.error("[WS] 처리 중 오류: player={} message={}", playerId, message.getPayload(), e);
@@ -87,8 +94,20 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
-        log.info("[WS] 종료: player={} session={} status={}", playerIdOf(session), session.getId(), status);
-        sessionRegistry.remove(playerIdOf(session), session);
+        long playerId = playerIdOf(session);
+        log.info("[WS] 종료: player={} session={} status={}", playerId, session.getId(), status);
+        sessionRegistry.remove(playerId, session);
+
+        if (sessionRegistry.isConnected(playerId)) {
+            return;   // 중복 로그인으로 옛 연결만 끊긴 것: 새 연결이 살아 있으니 방은 그대로
+        }
+        try {
+            lobbyService.leaveWaitingRoom(playerId)   // 대기방이면 퇴장, 게임 중이면 그대로
+                    .ifPresent(roomId -> sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId)));
+                    // 해당 플레이어가 나가도 대기방이 남아있으면 방에 ROOM_UPDATED 브로드캐스트
+        } catch (RuntimeException e) {
+            log.error("[WS] 종료 정리 실패: player={}", playerId, e);
+        }
     }
 
     @Override
@@ -102,6 +121,6 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void sendError(long playerId, ErrorCode code) {
-        sender.sendToPlayer(playerId, MessageType.ERROR, ErrorPayload.of(code));
+        sender.sendToPlayer(playerId, code.type(), ErrorPayload.of(code));   // 오류 종류에 따라 COMMON_ERROR / LOBBY_ERROR / GAME_ERROR
     }
 }

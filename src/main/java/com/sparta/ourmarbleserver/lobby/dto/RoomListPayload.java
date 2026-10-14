@@ -13,5 +13,5 @@ import java.util.List;
 public record RoomListPayload(List<RoomSummary> rooms) {
 
     /** 방 목록에 나오는 방 한 개의 요약. playerCount는 지금 참가한 인원수다. */
-    public record RoomSummary(String roomId, String hostNickname, int mapId, int playerCount) {}
+    public record RoomSummary(String roomId, String hostNickname, int mapId, int playerCount, int maxPlayers) {}
 }

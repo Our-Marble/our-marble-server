@@ -1,6 +1,6 @@
 package com.sparta.ourmarbleserver.global.controller;
 
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.ErrorPayload;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -54,6 +54,6 @@ public class ErrorMessageDocController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class), examples = @ExampleObject(value = "{\"code\": \"NOT_YOUR_TURN\", \"message\": \"내 차례가 아닙니다.\"}")))
     @GetMapping("/error")
     public ErrorPayload error() {
-        return ErrorPayload.of(ErrorCode.NOT_YOUR_TURN);
+        return ErrorPayload.of(GameErrorCode.NOT_YOUR_TURN);
     }
 }

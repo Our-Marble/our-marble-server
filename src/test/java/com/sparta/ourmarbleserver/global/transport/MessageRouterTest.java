@@ -1,7 +1,7 @@
 package com.sparta.ourmarbleserver.global.transport;
 
 import com.sparta.ourmarbleserver.global.exception.GameException;
-import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
@@ -45,7 +45,7 @@ class MessageRouterTest {
         assertThatThrownBy(() -> router.route(1L, new InboundMessage(MessageType.CREATE_ROOM, emptyBody)))
                 .isInstanceOf(GameException.class)
                 .extracting(e -> ((GameException) e).code())
-                .isEqualTo(ErrorCode.INVALID_MESSAGE);
+                .isEqualTo(CommonErrorCode.INVALID_MESSAGE);
     }
 
     @Test
