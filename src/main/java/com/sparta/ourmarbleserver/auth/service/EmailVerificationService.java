@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.auth.service;
 
 import com.sparta.ourmarbleserver.auth.repository.EmailVerificationStore;
+import com.sparta.ourmarbleserver.auth.repository.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -20,12 +21,20 @@ public class EmailVerificationService {
 
     private final EmailVerificationStore emailVerificationStore;
     private final JavaMailSender mailSender;
+    private final PlayerRepository playerRepository;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${app.mail.from}")
     private String from;
 
     public void sendCode(String email) {
+        if (playerRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "이미 가입된 이메일입니다."
+            );
+        }
+
         String code = "%06d".formatted(secureRandom.nextInt(CODE_BOUND));
         emailVerificationStore.saveCode(email, code);
 
