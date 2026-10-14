@@ -1,17 +1,14 @@
 package com.sparta.ourmarbleserver.lobby.state;
 
-import org.springframework.stereotype.Component;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 서버 메모리에 방 상태를 보관하는 구현.
+ * 서버 메모리에 방 상태를 보관하는 구현. 테스트용 (실제 서버는 RedisRoomRepository를 쓴다).
  * 방 → 플레이어들은 Room.memberIds(), 플레이어 → 방은 여기 색인이 맡는다.
  * 색인은 save / deleteById 때만 갱신되므로, Room을 고친 뒤에는 반드시 save를 불러야 한다.
  */
-@Component
 public class InMemoryRoomRepository implements RoomRepository {
     private final Map<String, Room> store = new ConcurrentHashMap<>();
 

@@ -3,7 +3,7 @@ package com.sparta.ourmarbleserver.lobby.state;
 import java.util.List;
 import java.util.Optional;
 
-/** 방 상태 저장소. 지금은 메모리 구현만 있고, 나중에 다른 저장소로 바꿔 끼울 수 있다. */
+/** 방 상태 저장소. 서버는 RedisRoomRepository, 테스트는 InMemoryRoomRepository를 쓴다. */
 public interface RoomRepository {
 
     Optional<Room> findById(String roomId);
