@@ -8,6 +8,7 @@ import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.dto.SignupRequest;
 import com.sparta.ourmarbleserver.auth.service.EmailVerificationService;
 import com.sparta.ourmarbleserver.auth.service.JwtAuthService;
+import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.auth.service.SignupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class AuthController {
     private final JwtAuthService jwtAuthService;
     private final SignupService signupService;
+    private final PlayerService playerService;
     private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 가입한다. 로그인 없이 호출할 수 있다.")
