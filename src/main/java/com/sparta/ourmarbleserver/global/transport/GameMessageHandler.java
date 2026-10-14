@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.Optional;
 import java.util.Set;
 
 @Component
@@ -29,7 +30,8 @@ public class GameMessageHandler implements WsMessageHandler{
                 MessageType.ROLL_DICE,
                 MessageType.SELL_PROPERTIES,
                 MessageType.ACQUIRE_PROPERTY,
-                MessageType.PURCHASE_PROPERTY
+                MessageType.PURCHASE_PROPERTY,
+                MessageType.GAME_STATE_REQUEST
         );
     }
 
@@ -65,6 +67,16 @@ public class GameMessageHandler implements WsMessageHandler{
             case PURCHASE_PROPERTY -> {
                 PurchasePropertyRequestPayload purchasePropertyRequestPayload = objectMapper.treeToValue(payload, PurchasePropertyRequestPayload.class);
                 gameResult = gameService.purchaseProperty(playerId, purchasePropertyRequestPayload.propertyId(), purchasePropertyRequestPayload.isAccept());
+            }
+            case GAME_STATE_REQUEST -> {
+                Optional<GameMessage> stateResult = gameService.syncState(playerId);
+                GameMessage gameMessage = stateResult.orElse(null);
+
+                if(gameMessage == null)
+                    webSocketMessageSender.sendToPlayer(playerId, MessageType.GAME_STATE_SYNC, null);
+                else
+                    webSocketMessageSender.sendToPlayer(playerId, MessageType.GAME_STATE_SYNC, gameMessage.payload());
+                return;
             }
             default -> throw new IllegalStateException("GameMessageHandler가 처리하지 않는 request type 입니다. type : " + requestType);
         }
