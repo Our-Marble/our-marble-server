@@ -46,10 +46,11 @@ class LobbyServiceTest {
         List<Long> playerIds;
         Map<Long, String> nicknames;
         Set<Long> botIds;
+        GameConfig config;
         boolean fail;
 
         RecordingGameService() {
-            when(mock.startGame(anyString(), anyList(), anyMap(), anySet())).thenAnswer(invocation -> {
+            when(mock.startGame(anyString(), anyList(), anyMap(), anySet(), any(GameConfig.class))).thenAnswer(invocation -> {
                 if (fail) {
                     throw new IllegalStateException("시작 실패");
                 }
@@ -58,6 +59,7 @@ class LobbyServiceTest {
                 playerIds = new ArrayList<>(invocation.<List<Long>>getArgument(1));
                 nicknames = new HashMap<>(invocation.<Map<Long, String>>getArgument(2));
                 botIds = new HashSet<>(invocation.<Set<Long>>getArgument(3));
+                config = invocation.getArgument(4);
                 return null;
             });
         }
@@ -701,5 +703,32 @@ class LobbyServiceTest {
 
         assertThat(snapshot.roomName()).isEmpty();
         assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(2));
+    }
+
+
+    // ===== 시작할 때 넘기는 게임 설정 =====
+
+    @Test
+    void 게임을_시작하면_방에_저장된_설정을_startGame에_넘긴다() {
+        RoomInfo info = roomWithTwo();
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        GameConfig config = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+        room.setConfig(config);
+        repository.save(room);
+        service.setReady(info.roomId(), P2, true);
+
+        service.start(info.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(config);
+    }
+
+    @Test
+    void 설정을_안_바꾸고_시작하면_기본_설정에_방의_맵_번호가_들어간다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(GameConfig.defaults().withMapId(MAP));
     }
 }

@@ -238,7 +238,7 @@ public class LobbyService {
             if (BotService.isBotId(memberId)) { botIds.add(memberId); }
         }
 
-        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds);
+        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, room.getConfig());
         room.setStatus(RoomStatus.PLAYING);
         repository.save(room);
         return toInfo(room);
