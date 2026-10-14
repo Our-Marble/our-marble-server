@@ -73,44 +73,6 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 구매_대기면_거절하고_턴이_넘어간다() {
-        GameState state = start();
-        waitAt(state, 3, TurnPhase.AWAITING_PURCHASE);
-
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
-
-        assertThat(state.getPropertyState(103).orElseThrow().hasOwner()).isFalse();
-        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
-        verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTY_PURCHASED), any());
-    }
-
-    @Test
-    void 건설_대기면_거절하고_턴이_넘어간다() {
-        GameState state = start();
-        state.getPropertyState(101).orElseThrow().setOwnerId(1L);
-        waitAt(state, 1, TurnPhase.AWAITING_BUILD);
-
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
-
-        assertThat(state.getPropertyState(101).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
-        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
-        verify(sender).sendToRoom(eq(ROOM), eq(MessageType.BUILT), any());
-    }
-
-    @Test
-    void 인수_대기면_거절하고_턴이_넘어간다() {
-        GameState state = start();
-        state.getPropertyState(101).orElseThrow().setOwnerId(2L);
-        waitAt(state, 1, TurnPhase.AWAITING_ACQUIRE);
-
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_ACQUIRE);
-
-        assertThat(state.getPropertyState(101).orElseThrow().isOwnedBy(2L)).isTrue();   // 주인이 그대로다
-        assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
-        verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTY_ACQUIRED), any());
-    }
-
-    @Test
     void 매각_대기면_싼_땅부터_통행료를_낼_만큼만_판다() {
         GameState state = start();
         state.getPropertyState(103).orElseThrow().setOwnerId(2L);                  // 통행료 60,000 (빌딩)
@@ -129,17 +91,6 @@ class AutoPlayServiceTest {
         assertThat(state.getPlayerState(1L).getMoney()).isZero();                           // 10,000 + 50,000 - 60,000
         assertThat(state.getPlayerState(2L).getMoney()).isEqualTo(500_000 + 60_000);
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTIES_SOLD), any());
-    }
-
-    @Test
-    void 세계여행_대기면_출발_칸으로_간다() {
-        GameState state = start();
-        waitAt(state, 24, TurnPhase.AWAITING_DESTINATION);
-
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_DESTINATION);
-
-        assertThat(state.getPlayerState(1L).getPosition()).isZero();
-        verify(sender).sendToRoom(eq(ROOM), eq(MessageType.DESTINATION_CHOSEN), any());
     }
 
     @Test
@@ -164,7 +115,8 @@ class AutoPlayServiceTest {
         verifyNoInteractions(sender);
     }
 
-    // ===== 봇: 사람과 달리 전략이 판단한다 =====
+    // ===== 구매·건설·인수·매각·세계여행: 봇과 AFK 사람 모두 봇 전략이 판단한다 =====
+    // (아래 테스트의 1번 플레이어는 봇 표시가 없는 사람이다. 사람이 AFK가 되어도 같은 전략으로 진행된다)
 
     /** 1번 플레이어를 봇으로 만든다. */
     private void makeBot(GameState state) {
@@ -172,9 +124,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_좋은_땅이면_구매한다() {
+    void 좋은_땅이면_구매한다() {
         GameState state = start();
-        makeBot(state);
         waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);   // 독도(수익 비율 1.5), 땅값 20만
 
         autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
@@ -185,9 +136,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_현금이_모자라면_구매를_거절한다() {
+    void 현금이_모자라면_구매를_거절한다() {
         GameState state = start();
-        makeBot(state);
         state.getPlayerState(1L).setMoney(150_000);
         waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);
 
@@ -198,9 +148,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_회수가_빠른_땅에는_건설한다() {
+    void 회수가_빠른_땅에는_건설한다() {
         GameState state = start();
-        makeBot(state);
         own(state, 131, 1L, BuildingLevel.LAND);   // 서울 별장 15만: 통행료 +12.8만
         waitAt(state, 31, TurnPhase.AWAITING_BUILD);
 
@@ -211,9 +160,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_건설_불가_땅에서는_전략에_묻지_않고_거절한다() {
+    void 건설_불가_땅에서는_전략에_묻지_않고_거절한다() {
         GameState state = start();
-        makeBot(state);
         own(state, 104, 1L, BuildingLevel.LAND);   // 독도: 건설 불가
         waitAt(state, 4, TurnPhase.AWAITING_BUILD);
 
@@ -224,9 +172,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_호텔에서는_전략에_묻지_않고_거절한다() {
+    void 호텔에서는_전략에_묻지_않고_거절한다() {
         GameState state = start();
-        makeBot(state);
         own(state, 131, 1L, BuildingLevel.HOTEL);
         waitAt(state, 31, TurnPhase.AWAITING_BUILD);
 
@@ -237,9 +184,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_통행료로_빨리_회수할_땅이면_인수한다() {
+    void 통행료로_빨리_회수할_땅이면_인수한다() {
         GameState state = start();
-        makeBot(state);
         own(state, 104, 2L, BuildingLevel.LAND);   // 독도: 통행료 30만, 인수가 40만
         state.getPlayerState(1L).setMoney(1_000_000);
         waitAt(state, 4, TurnPhase.AWAITING_ACQUIRE);
@@ -251,9 +197,8 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_매각할_땅을_전략이_고른다() {
+    void 매각할_땅을_전략이_고른다() {
         GameState state = start();
-        makeBot(state);
         own(state, 103, 2L, BuildingLevel.BUILDING);   // 통행료 60,000
         own(state, 101, 1L, BuildingLevel.LAND);       // 매각가 25,000
         own(state, 106, 1L, BuildingLevel.LAND);       // 매각가 50,000
@@ -263,7 +208,7 @@ class AutoPlayServiceTest {
 
         autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_SELL);
 
-        // 사람(AFK)이라면 싼 땅부터 101, 106을 팔지만, 봇은 통행료 손실이 적은 서울 하나만 판다
+        // 싼 땅부터 101, 106을 파는 게 아니라, 전략이 통행료 손실이 적은 서울 하나만 판다
         assertThat(state.getPropertyState(131).orElseThrow().hasOwner()).isFalse();
         assertThat(state.getPropertyState(101).orElseThrow().isOwnedBy(1L)).isTrue();
         assertThat(state.getPropertyState(106).orElseThrow().isOwnedBy(1L)).isTrue();
@@ -271,15 +216,26 @@ class AutoPlayServiceTest {
     }
 
     @Test
-    void 봇은_세계여행_목적지를_전략이_고른다() {
+    void 세계여행_목적지를_전략이_고른다() {
         GameState state = start();
-        makeBot(state);
         waitAt(state, 24, TurnPhase.AWAITING_DESTINATION);
 
         autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_DESTINATION);
 
         assertThat(state.getPlayerState(1L).getPosition()).isEqualTo(4);   // 수익 비율이 가장 높은 빈 땅 독도
         assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
+    }
+
+    @Test
+    void 봇_표시가_있는_플레이어도_같은_전략으로_진행한다() {
+        GameState state = start();
+        makeBot(state);
+        waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);   // 독도(수익 비율 1.5), 땅값 20만
+
+        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+
+        assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
     }
 
     @Test

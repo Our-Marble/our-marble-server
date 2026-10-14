@@ -14,21 +14,16 @@ import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 /**
- * 제한 시간 안에 입력이 없으면, 서버가 그 phase에 맞는 요청을 대신 호출한다.
+ * 서버가 플레이어를 대신해 그 phase의 요청을 호출한다. 대상은 봇이거나, 제한 시간 안에 입력이 없어 AFK가 된 사람이다.
  * 사람이 보낸 요청과 똑같이 GameService의 함수를 부르고, 돌려받은 결과를 방 전원에게 보낸다.
- * 대신 진행의 행동: 주사위와 카드는 그대로, 구매·건설·인수는 거절, 매각은 싼 땅부터, 세계여행은 출발 칸으로 간다.
+ * 주사위와 카드는 그대로 하고, 구매·건설·인수·매각·세계여행은 봇 전략(IBotStrategy)에게 물어서 정한다.
+ * (봇은 항상 이 방식으로 진행하고, 사람은 AFK일 때만 이 방식으로 진행한다)
  */
-
 @Service
 public class AutoPlayService implements TimerService.Handler {
-
-    /** 세계여행 목적지. 출발 칸이다. (무인도 같은 불리한 칸을 피한다) */
-    private static final int DESTINATION_POSITION = 0;
 
     private final GameService gameService;
     private final GameStateRepository repository;
@@ -65,7 +60,7 @@ public class AutoPlayService implements TimerService.Handler {
         return switch (phase) {
             case AWAITING_ROLL -> gameService.rollDice(playerId);
             case AWAITING_DRAW_CARD -> gameService.drawCard(playerId);
-            case AWAITING_DESTINATION -> gameService.chooseDestination(playerId, chooseDestination(state, player));
+            case AWAITING_DESTINATION -> gameService.chooseDestination(playerId, strategy.chooseTravelDestination(state, playerId));
             case AWAITING_PURCHASE -> gameService.purchaseProperty(playerId, propertyIdUnder(player), wantsPurchase(state, player));
             case AWAITING_BUILD -> gameService.build(playerId, propertyIdUnder(player), wantsBuild(state, player));
             case AWAITING_ACQUIRE -> gameService.acquireProperty(playerId, propertyIdUnder(player), wantsAcquire(state, player));
@@ -73,16 +68,10 @@ public class AutoPlayService implements TimerService.Handler {
         };
     }
 
-    /** 세계여행 목적지. 봇은 전략이 고르고, 그 외에는 출발 칸이다. */
-    private int chooseDestination(GameState state, PlayerState player) {
-        return player.isBot() ? strategy.chooseTravelDestination(state, player.getPlayerId()) : DESTINATION_POSITION;
-    }
-
-    /** 땅을 살지. 봇만 전략이 판단하고, 그 외에는 거절한다. */
+    /** 땅을 살지. 전략이 판단한다. */
     private boolean wantsPurchase(GameState state, PlayerState player) {
         int propertyId = propertyIdUnder(player);
-        return player.isBot()
-                && strategy.shouldPurchase(state, player.getPlayerId(), propertyId, propertyService.getLandPrice(propertyId));
+        return strategy.shouldPurchase(state, player.getPlayerId(), propertyId, propertyService.getLandPrice(propertyId));
     }
 
     /** 건설할지. 건설 불가 땅과 호텔은 전략에 묻지 않고 거절한다. */
@@ -90,18 +79,17 @@ public class AutoPlayService implements TimerService.Handler {
         int propertyId = propertyIdUnder(player);
         PropertyState property = state.getPropertyState(propertyId)
                 .orElseThrow(() -> new GameException(GameErrorCode.INVALID_PROPERTY));
-        if (!player.isBot() || !propertyService.canBuild(propertyId) || property.getBuildingLevel() == BuildingLevel.HOTEL) { return false;}
+        if (!propertyService.canBuild(propertyId) || property.getBuildingLevel() == BuildingLevel.HOTEL) { return false;}
         BuildingLevel next = BuildingLevel.fromIndex(property.getBuildingLevel().index() + 1);
         return strategy.shouldBuild(state, player.getPlayerId(), propertyId, propertyService.getBuildCost(propertyId, next));
     }
 
-    /** 인수할지. 봇만 전략이 판단하고, 그 외에는 거절한다. */
+    /** 인수할지. 전략이 판단한다. */
     private boolean wantsAcquire(GameState state, PlayerState player) {
         int propertyId = propertyIdUnder(player);
         PropertyState property = state.getPropertyState(propertyId)
                 .orElseThrow(() -> new GameException(GameErrorCode.INVALID_PROPERTY));
-        return player.isBot()
-                && strategy.shouldAcquire(state, player.getPlayerId(), propertyId, propertyService.getAcquireValue(property));
+        return strategy.shouldAcquire(state, player.getPlayerId(), propertyId, propertyService.getAcquireValue(property));
     }
 
     /** 플레이어의 말이 서 있는 땅 번호 */
@@ -114,28 +102,10 @@ public class AutoPlayService implements TimerService.Handler {
     }
 
 
-    /** 통행료를 낼 수 있을 때까지, 매각가가 싼 땅부터 고른다. */
+    /** 통행료를 낼 수 있을 때까지 팔 땅을 전략이 고른다. */
     private List<Integer> chooseSellProperties(GameState state, PlayerState player) {
         PropertyState tollProperty = state.getPropertyState(propertyIdUnder(player))
                 .orElseThrow(() -> new GameException(GameErrorCode.INVALID_PROPERTY));
-        long toll = propertyService.getToll(tollProperty);
-
-        if (player.isBot()) {
-            return strategy.chooseSellProperties(state, player.getPlayerId(), toll);
-        }
-
-        List<PropertyState> mine = state.properties().stream()
-                .filter(property -> property.isOwnedBy(player.getPlayerId()))
-                .sorted(Comparator.comparingLong(propertyService::getSellValue))
-                .toList();
-
-        List<Integer> selected = new ArrayList<>();
-        long money = player.getMoney();
-        for (PropertyState property : mine) {
-            if (money >= toll) { break; }
-            selected.add(property.getPropertyId());
-            money += propertyService.getSellValue(property);
-        }
-        return selected;
+        return strategy.chooseSellProperties(state, player.getPlayerId(), propertyService.getToll(tollProperty));
     }
 }
