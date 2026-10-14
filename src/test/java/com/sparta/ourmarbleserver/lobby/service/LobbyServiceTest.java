@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.lobby.service;
 
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
@@ -12,6 +13,8 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.*;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
+import com.sparta.ourmarbleserver.lobby.state.Room;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -73,8 +76,9 @@ class LobbyServiceTest {
     }
 
     private final RecordingGameService gameService = new RecordingGameService();
+    private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final LobbyService service =
-            new LobbyService(new InMemoryRoomRepository(), gameService.mock, new FakePlayerService());
+            new LobbyService(repository, gameService.mock, new FakePlayerService());
 
     private static void assertError(ErrorCode code, Runnable action) {
         assertThatThrownBy(action::run)
@@ -578,4 +582,67 @@ class LobbyServiceTest {
         assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.roomIdOf(P2));
     }
 
+    // ===== 봇이 든 방 (봇 추가 기능 없이 저장소에 직접 넣어서 확인) =====
+
+    /** 사람 1명(HOST)이 만든 방에 음수 번호 봇들을 직접 넣는다. 봇은 항상 준비 상태이고 이름은 "봇N"이다. */
+    private RoomInfo roomWithBots(long... botIds) {
+        RoomInfo info = service.createRoom(HOST, MAP, 4);
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        for (int i = 0; i < botIds.length; i++) {
+            room.addMember(botIds[i], true);
+            room.setNickname(botIds[i], "봇" + (i + 1));
+        }
+        repository.save(room);
+        return service.getRoom(info.roomId());
+    }
+
+    @Test
+    void 사람_한_명과_봇으로_게임을_시작하면_봇_번호와_방에_저장된_이름을_넘긴다() {
+        RoomInfo room = roomWithBots(-1);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.playerIds).containsExactly(HOST, -1L);
+        assertThat(gameService.botIds).containsExactly(-1L);
+        assertThat(gameService.nicknames).containsEntry(HOST, "닉1").containsEntry(-1L, "봇1");
+        assertThat(service.getRoom(room.roomId()).status()).isEqualTo(RoomStatus.PLAYING);
+    }
+
+    @Test
+    void 사람이_모두_나가면_봇이_남아도_방이_삭제된다() {
+        RoomInfo room = roomWithBots(-1, -2);
+
+        boolean remains = service.leave(room.roomId(), HOST);
+
+        assertThat(remains).isFalse();
+        assertThat(repository.findById(room.roomId())).isEmpty();
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(HOST));
+    }
+
+    @Test
+    void 방장이_나가면_봇이_아니라_사람이_방장이_된다() {
+        RoomInfo room = roomWithBots(-1);
+        service.join(room.roomId(), P2);
+
+        service.leave(room.roomId(), HOST);
+
+        RoomInfo after = service.getRoom(room.roomId());
+        assertThat(after.hostId()).isEqualTo(P2);
+        assertThat(after.players()).extracting(RoomPlayer::playerId, RoomPlayer::ready)
+                .containsExactly(Tuple.tuple(-1L, true), Tuple.tuple(P2, true));
+    }
+
+    @Test
+    void 게임이_끝나도_봇은_준비_상태를_유지한다() {
+        RoomInfo room = roomWithBots(-1);
+        service.join(room.roomId(), P2);
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        assertThat(service.getRoom(room.roomId()).players())
+                .extracting(RoomPlayer::playerId, RoomPlayer::ready)
+                .containsExactly(Tuple.tuple(HOST, true), Tuple.tuple(-1L, true), Tuple.tuple(P2, false));
+    }
 }

@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
@@ -102,6 +103,16 @@ public class LobbyService {
                 .map(Room::getRoomId);
     }
 
+    /** 방에 사람이 한 명이라도 있는지. (봇만 남았는지 가릴 때 쓴다) */
+    private boolean hasHuman(Room room) {
+        return room.memberIds().stream().anyMatch(id -> !BotService.isBotId(id));
+    }
+
+    /** 가장 먼저 참가한 사람. 새 방장을 고를 때 쓴다. 사람이 없으면 예외. */
+    private long firstHuman(Room room) {
+        return room.memberIds().stream().filter(id -> !BotService.isBotId(id)).findFirst().orElseThrow();
+    }
+
     /** 이 플레이어가 들어 있는 방. 어느 방에도 없으면 NOT_IN_ROOM. */
     public synchronized RoomInfo findRoomByPlayer(long playerId) {
         return toInfo(findRoom(roomIdOf(playerId)));
@@ -144,12 +155,12 @@ public class LobbyService {
         }
 
         room.removeMember(playerId);
-        if (room.isEmpty()) {
+        if (!hasHuman(room)) {
             repository.deleteById(roomId);
             return false;
         }
         if (room.getHostId() == playerId) {
-            long newHostId = room.memberIds().getFirst();
+            long newHostId = firstHuman(room);
             room.setHostId(newHostId);
             room.setReady(newHostId, true); // 방장은 항상 준비 상태
         }
@@ -219,12 +230,11 @@ public class LobbyService {
         }
 
         Map<Long, String> nickNameMap = new HashMap<>();
-        for (long memberId : room.memberIds()) {
-            String nickname = playerService.findMe(memberId).getNickname();
-            nickNameMap.put(memberId, nickname == null ? "" : nickname);
-        }
-
         Set<Long> botIds = new HashSet<>();
+        for (long memberId : room.memberIds()) {
+            nickNameMap.put(memberId, room.nicknameOf(memberId));
+            if (BotService.isBotId(memberId)) { botIds.add(memberId); }
+        }
 
         gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds);
         room.setStatus(RoomStatus.PLAYING);
@@ -254,7 +264,7 @@ public class LobbyService {
         repository.findById(event.roomId()).ifPresent(room -> {
             room.setStatus(RoomStatus.WAITING);
             room.memberIds().stream()
-                    .filter(id -> id != room.getHostId())
+                    .filter(id -> id != room.getHostId() && !BotService.isBotId(id))
                     .forEach(id -> room.setReady(id, false));
             repository.save(room);
         });
