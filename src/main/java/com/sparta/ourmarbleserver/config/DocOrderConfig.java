@@ -40,14 +40,16 @@ public class DocOrderConfig {
             "/docs/requests/leave-room",
             "/docs/requests/set-ready",
             "/docs/requests/start-game",
-            "/docs/requests/refresh-room-list",
+            "/docs/requests/room-list-request",
             "/docs/notifications/connected",
             "/docs/notifications/room-entered",
             "/docs/notifications/room-left",
             "/docs/notifications/room-list",
             "/docs/notifications/room-updated",
             "/docs/notifications/game-started",
-            "/docs/notifications/error");
+            "/docs/notifications/common-error",
+            "/docs/notifications/lobby-error",
+            "/docs/notifications/game-error");
 
     /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
     private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림", "로비 요청", "로비 알림", "오류 알림");

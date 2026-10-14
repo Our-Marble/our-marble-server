@@ -8,6 +8,7 @@ import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.dto.SignupRequest;
 import com.sparta.ourmarbleserver.auth.service.EmailVerificationService;
 import com.sparta.ourmarbleserver.auth.service.JwtAuthService;
+import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.auth.service.SignupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class AuthController {
     private final JwtAuthService jwtAuthService;
     private final SignupService signupService;
+    private final PlayerService playerService;
     private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 가입한다. 로그인 없이 호출할 수 있다.")
@@ -55,6 +57,7 @@ public class AuthController {
     @Operation(summary = "이메일 인증번호 발송", description = "입력한 이메일로 6자리 인증번호를 발송한다. 인증번호는 5분 동안 유효하다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "204", description = "인증번호 발송 성공 (본문 없음)")
     @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나 이메일이 비어 있음")
+    @ApiResponse(responseCode = "409", description = "이미 가입된 이메일")
     @ApiResponse(responseCode = "502", description = "메일 서버를 통한 발송 실패")
     @PostMapping("/email/send")
     public ResponseEntity<Void> emailSend(

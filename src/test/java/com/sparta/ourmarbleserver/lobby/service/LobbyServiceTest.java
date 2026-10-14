@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.lobby.service;
 
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
@@ -12,6 +13,8 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.*;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
+import com.sparta.ourmarbleserver.lobby.state.Room;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -43,10 +46,11 @@ class LobbyServiceTest {
         List<Long> playerIds;
         Map<Long, String> nicknames;
         Set<Long> botIds;
+        GameConfig config;
         boolean fail;
 
         RecordingGameService() {
-            when(mock.startGame(anyString(), anyList(), anyMap(), anySet())).thenAnswer(invocation -> {
+            when(mock.startGame(anyString(), anyList(), anyMap(), anySet(), any(GameConfig.class))).thenAnswer(invocation -> {
                 if (fail) {
                     throw new IllegalStateException("시작 실패");
                 }
@@ -55,6 +59,7 @@ class LobbyServiceTest {
                 playerIds = new ArrayList<>(invocation.<List<Long>>getArgument(1));
                 nicknames = new HashMap<>(invocation.<Map<Long, String>>getArgument(2));
                 botIds = new HashSet<>(invocation.<Set<Long>>getArgument(3));
+                config = invocation.getArgument(4);
                 return null;
             });
         }
@@ -73,8 +78,9 @@ class LobbyServiceTest {
     }
 
     private final RecordingGameService gameService = new RecordingGameService();
+    private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final LobbyService service =
-            new LobbyService(new InMemoryRoomRepository(), gameService.mock, new FakePlayerService());
+            new LobbyService(repository, gameService.mock, new FakePlayerService());
 
     private static void assertError(ErrorCode code, Runnable action) {
         assertThatThrownBy(action::run)
@@ -564,7 +570,7 @@ class LobbyServiceTest {
         service.join(room.roomId(), P2);
 
         assertThat(service.roomList().rooms()).containsExactly(
-                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2));
+                new RoomListPayload.RoomSummary(room.roomId(), "닉1", GameConfig.DEFAULT_MAP_ID, 2, 4));
     }
 
     @Test
@@ -578,4 +584,195 @@ class LobbyServiceTest {
         assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.roomIdOf(P2));
     }
 
+    // ===== 봇이 든 방 (봇 추가 기능 없이 저장소에 직접 넣어서 확인) =====
+
+    /** 사람 1명(HOST)이 만든 방에 음수 번호 봇들을 직접 넣는다. 봇은 항상 준비 상태이고 이름은 "봇N"이다. */
+    private RoomInfo roomWithBots(long... botIds) {
+        RoomInfo info = service.createRoom(HOST, MAP, 4);
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        for (int i = 0; i < botIds.length; i++) {
+            room.addMember(botIds[i], true);
+            room.setNickname(botIds[i], "봇" + (i + 1));
+        }
+        repository.save(room);
+        return service.getRoom(info.roomId());
+    }
+
+    @Test
+    void 사람_한_명과_봇으로_게임을_시작하면_봇_번호와_방에_저장된_이름을_넘긴다() {
+        RoomInfo room = roomWithBots(-1);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.playerIds).containsExactly(HOST, -1L);
+        assertThat(gameService.botIds).containsExactly(-1L);
+        assertThat(gameService.nicknames).containsEntry(HOST, "닉1").containsEntry(-1L, "봇1");
+        assertThat(service.getRoom(room.roomId()).status()).isEqualTo(RoomStatus.PLAYING);
+    }
+
+    @Test
+    void 사람이_모두_나가면_봇이_남아도_방이_삭제된다() {
+        RoomInfo room = roomWithBots(-1, -2);
+
+        boolean remains = service.leave(room.roomId(), HOST);
+
+        assertThat(remains).isFalse();
+        assertThat(repository.findById(room.roomId())).isEmpty();
+        assertError(LobbyErrorCode.NOT_IN_ROOM, () -> service.findRoomByPlayer(HOST));
+    }
+
+    @Test
+    void 방장이_나가면_봇이_아니라_사람이_방장이_된다() {
+        RoomInfo room = roomWithBots(-1);
+        service.join(room.roomId(), P2);
+
+        service.leave(room.roomId(), HOST);
+
+        RoomInfo after = service.getRoom(room.roomId());
+        assertThat(after.hostId()).isEqualTo(P2);
+        assertThat(after.players()).extracting(RoomPlayer::playerId, RoomPlayer::ready)
+                .containsExactly(Tuple.tuple(-1L, true), Tuple.tuple(P2, true));
+    }
+
+    @Test
+    void 게임이_끝나도_봇은_준비_상태를_유지한다() {
+        RoomInfo room = roomWithBots(-1);
+        service.join(room.roomId(), P2);
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        service.onGameEnded(new GameEndedEvent(room.roomId()));
+
+        assertThat(service.getRoom(room.roomId()).players())
+                .extracting(RoomPlayer::playerId, RoomPlayer::ready)
+                .containsExactly(Tuple.tuple(HOST, true), Tuple.tuple(-1L, true), Tuple.tuple(P2, false));
+    }
+
+    // ===== 방의 기본 설정 =====
+
+    @Test
+    void 방을_만들면_기본_설정에_방의_맵_번호가_들어간다() {
+        RoomInfo room = service.createRoom(HOST, 3, 4);
+
+        Room saved = repository.findById(room.roomId()).orElseThrow();
+        assertThat(saved.getConfig()).isEqualTo(GameConfig.defaults().withMapId(3));
+        assertThat(saved.getMapId()).isEqualTo(3);
+        assertThat(room.mapId()).isEqualTo(3);
+    }
+
+    // ===== ROOM_UPDATED의 설정과 최대 인원 =====
+
+    @Test
+    void ROOM_UPDATED에_기본_설정과_최대_인원이_담긴다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 3);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
+        assertThat(snapshot.maxPlayers()).isEqualTo(3);
+    }
+
+    @Test
+    void ROOM_UPDATED는_방에_저장된_설정을_그대로_싣는다() {
+        RoomInfo info = service.createRoom(HOST, MAP, 4);
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        GameConfig config = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+        room.setConfig(config);
+        repository.save(room);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(info.roomId()).room();
+
+        assertThat(snapshot.config()).isEqualTo(config);
+        assertThat(snapshot.mapId()).isEqualTo(3);
+    }
+
+    @Test
+    void 설정과_최대_인원_없이_만든_RoomSnapshot은_기본_설정과_최대_인원_4명을_가진다() {
+        RoomUpdatedPayload.RoomSnapshot snapshot =
+                new RoomUpdatedPayload.RoomSnapshot("r_3", 1L, 2, RoomStatus.WAITING, List.of());
+
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(2));
+        assertThat(snapshot.maxPlayers()).isEqualTo(GameConfig.MAX_PLAYERS);
+    }
+
+    // ===== 시작할 때 넘기는 게임 설정 =====
+
+    @Test
+    void 게임을_시작하면_방에_저장된_설정을_startGame에_넘긴다() {
+        RoomInfo info = roomWithTwo();
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        GameConfig config = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+        room.setConfig(config);
+        repository.save(room);
+        service.setReady(info.roomId(), P2, true);
+
+        service.start(info.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(config);
+    }
+
+    @Test
+    void 설정을_안_바꾸고_시작하면_기본_설정에_방의_맵_번호가_들어간다() {
+        RoomInfo room = roomWithTwo();
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(GameConfig.defaults().withMapId(MAP));
+    }
+
+    // ===== 방장의 게임 설정 변경 =====
+
+    /** 기본값과 모두 다른 설정. 바뀐 값을 확인하기 쉽다. */
+    private static final GameConfig NEW_CONFIG = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+
+    @Test
+    void 방장이_설정을_바꾸면_ROOM_UPDATED에_반영된다() {
+        RoomInfo room = roomWithTwo();
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.config()).isEqualTo(NEW_CONFIG);
+        assertThat(snapshot.mapId()).isEqualTo(3);
+    }
+
+    @Test
+    void 설정을_바꿔도_최대_인원은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 3);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+
+        assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(3);
+    }
+
+    @Test
+    void 바꾼_설정으로_게임을_시작한다() {
+        RoomInfo room = roomWithTwo();
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.config).isEqualTo(NEW_CONFIG);
+    }
+
+    @Test
+    void 방장이_아니거나_시작한_방이거나_없는_방이면_설정을_바꿀_수_없다() {
+        RoomInfo room = roomWithTwo();
+        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG));
+
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG));
+    }
+
+    @Test
+    void 설정이_없으면_INVALID_STATE이고_방은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null));
+        assertThat(service.roomUpdated(room.roomId()).room().config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
+    }
 }

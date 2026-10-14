@@ -52,13 +52,13 @@ public class LobbyMessageDocController {
     public void roomLeft() {
     }
 
-    @Operation(summary = "방목록", description = "요청 REFRESH_ROOM_LIST → 알림 ROOM_LIST. 대기 중인 방 목록으로, 요청자에게만 간다. 방이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)")
+    @Operation(summary = "방목록", description = "요청 ROOM_LIST_REQUEST → 알림 ROOM_LIST. 대기 중인 방 목록으로, 요청자에게만 간다. 방이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)")
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = RoomListPayload.class),
                     examples = @ExampleObject(value = "{\"rooms\": [{\"roomId\": \"r_3\", \"hostNickname\": \"철수\", \"mapId\": 1, \"playerCount\": 2}]}")))
     @GetMapping("/room-list")
     public RoomListPayload roomList() {
-        return new RoomListPayload(List.of(new RoomListPayload.RoomSummary("r_3", "철수", 1, 2)));
+        return new RoomListPayload(List.of(new RoomListPayload.RoomSummary("r_3", "철수", 1, 2, 4)));
     }
 
     @Operation(summary = "방상태변경", description = "요청 CREATE_ROOM, ENTER_ROOM, LEAVE_ROOM, SET_READY → 알림 ROOM_UPDATED. 방 상태가 바뀌었다 (입장, 퇴장, 준비, 방장 변경). players의 순서가 참가 순서이고 게임 시작 시 턴 순서가 된다. 방장은 항상 ready=true. status는 WAITING, PLAYING [예시 JSON 열기](/docs/notifications/room-updated)")
