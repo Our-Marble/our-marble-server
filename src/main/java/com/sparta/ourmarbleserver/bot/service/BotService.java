@@ -1,5 +1,7 @@
 package com.sparta.ourmarbleserver.bot.service;
 
+import org.springframework.stereotype.Service;
+
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -8,6 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 번호는 실제 유저 번호(양수)와 겹치지 않도록 음수로 주고, 서버 전체에서 하나도 겹치지 않는다.
  * 게임은 번호 하나로 플레이어와 게임을 찾으므로, 서로 다른 방의 봇끼리도 번호가 같으면 안 된다.
  */
+@Service
 public class BotService {
     private static final String NICKNAME_PREFIX = "봇";
     private final AtomicLong sequence = new AtomicLong();
