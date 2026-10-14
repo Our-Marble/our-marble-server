@@ -1,7 +1,9 @@
 package com.sparta.ourmarbleserver.global.transport;
 
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.CommonErrorCode;
+import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
@@ -12,6 +14,7 @@ import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 
@@ -31,6 +34,9 @@ class LobbyMessageHandlerTest {
 
     private final RoomUpdatedPayload updated = new RoomUpdatedPayload(null);
     private final RoomListPayload list = new RoomListPayload(List.of());
+
+    /** 기본값과 모두 다른 설정. */
+    private static final GameConfig NEW_CONFIG = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
 
     @Test
     void 방을_만들면_본인에게_입장_방_전원에게_상태를_알린다() {
@@ -67,5 +73,40 @@ class LobbyMessageHandlerTest {
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(CommonErrorCode.INVALID_MESSAGE));
         verify(lobbyService, never()).join(anyString(), eq(1L));
+    }
+
+    // ===== 방장의 게임 설정 변경 (ROOM_CONFIG_REQUEST) =====
+
+    @Test
+    void 방장이_설정을_바꾸면_방_전원에게_ROOM_UPDATED를_보낸다() {
+        when(lobbyService.roomIdOf(1L)).thenReturn("r_1");
+        when(lobbyService.roomUpdated("r_1")).thenReturn(updated);
+
+        handler.handle(MessageType.ROOM_CONFIG_REQUEST, 1L, configBody(NEW_CONFIG, 3));
+
+        InOrder order = inOrder(lobbyService, sender);
+        order.verify(lobbyService).setRoomConfig("r_1", 1L, NEW_CONFIG, 3);         // 설정과 최대 인원을 그대로 전달
+        order.verify(sender).sendToRoom("r_1", MessageType.ROOM_UPDATED, updated);  // 바꾼 뒤에 방 전원에게 알림
+        verify(sender, never()).sendToPlayer(anyLong(), any(), any());
+    }
+
+    @Test
+    void 방장이_아니면_오류가_그대로_올라가고_알림은_보내지_않는다() {
+        when(lobbyService.roomIdOf(2L)).thenReturn("r_1");
+        doThrow(new GameException(LobbyErrorCode.NOT_HOST))
+                .when(lobbyService).setRoomConfig("r_1", 2L, NEW_CONFIG, 3);
+
+        assertThatThrownBy(() -> handler.handle(MessageType.ROOM_CONFIG_REQUEST, 2L, configBody(NEW_CONFIG, 3)))
+                .isInstanceOfSatisfying(GameException.class,
+                        e -> assertThat(e.code()).isEqualTo(LobbyErrorCode.NOT_HOST));
+        verify(sender, never()).sendToRoom(anyString(), any(), any());
+    }
+
+    /** {"config": {...}, "maxPlayers": n} 모양의 요청 본문. type은 핸들러에 따로 넘기므로 넣지 않는다. */
+    private ObjectNode configBody(GameConfig config, int maxPlayers) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.set("config", objectMapper.valueToTree(config));
+        body.put("maxPlayers", maxPlayers);
+        return body;
     }
 }

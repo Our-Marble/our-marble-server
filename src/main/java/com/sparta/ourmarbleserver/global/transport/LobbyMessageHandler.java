@@ -6,6 +6,7 @@ import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.GameStartedPayload;
+import com.sparta.ourmarbleserver.lobby.dto.RoomConfigRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.SetReadyRequestPayload;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,8 @@ public class LobbyMessageHandler implements WsMessageHandler {
                 MessageType.LEAVE_ROOM,
                 MessageType.SET_READY,
                 MessageType.START_GAME,
-                MessageType.ROOM_LIST_REQUEST
+                MessageType.ROOM_LIST_REQUEST,
+                MessageType.ROOM_CONFIG_REQUEST
         );
     }
 
@@ -44,6 +46,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
             case SET_READY -> setReady(playerId, objectMapper.treeToValue(payload, SetReadyRequestPayload.class));
             case START_GAME -> startGame(playerId);
             case ROOM_LIST_REQUEST -> sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList()); // 방 목록은 자동으로 보내지 않는다. 로비 화면은 접속할 때와 새로고침(ROOM_LIST_REQUEST)할 때만 목록을 받는다.
+            case ROOM_CONFIG_REQUEST -> setRoomConfig(playerId, objectMapper.treeToValue(payload, RoomConfigRequestPayload.class));
             default -> throw new IllegalStateException("LobbyMessageHandler가 처리하지 않는 type: " + type);
         }
     }
@@ -81,6 +84,13 @@ public class LobbyMessageHandler implements WsMessageHandler {
     private void setReady(long playerId, SetReadyRequestPayload request) {
         String roomId = lobbyService.roomIdOf(playerId);
         lobbyService.setReady(roomId, playerId, request.ready());
+        sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
+    }
+
+    // 방장이 설정(게임 설정 + 최대 인원)을 바꾸면 방 전원에게 새 설정이 담긴 ROOM_UPDATED
+    private void setRoomConfig(long playerId, RoomConfigRequestPayload request) {
+        String roomId = lobbyService.roomIdOf(playerId);   // 방에 없으면 NOT_IN_ROOM
+        lobbyService.setRoomConfig(roomId, playerId, request.config(), request.maxPlayers());
         sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
     }
 

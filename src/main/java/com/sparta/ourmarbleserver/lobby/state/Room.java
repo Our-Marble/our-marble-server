@@ -20,7 +20,9 @@ public class Room {
     private long hostId;
 
     private final int mapId;
-    private final int maxPlayers;
+
+    @Setter // 최대 인원 2~4명. 방장이 대기 중에 변경 가능
+    private int maxPlayers;
 
     @Setter
     private RoomStatus status = RoomStatus.WAITING;

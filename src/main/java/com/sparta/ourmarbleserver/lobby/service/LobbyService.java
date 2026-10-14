@@ -187,13 +187,14 @@ public class LobbyService {
     // ==== 방 설정 ====
 
     /**
-     * 방장이 게임 설정을 바꾼다. 최대 인원은 바꾸지 않는다.
-     * 클라는 ROOM_UPDATED 타입으로 RoomUpdatedPayload를 보내고, 요청을 받는 쪽이 그 안의 config만 꺼내 넘긴다.
-     * 값의 범위는 GameConfig가 만들어질 때 이미 검증된다.
+     * 방장이 게임 설정과 최대 인원을 바꾼다.
+     * 클라는 ROOM_CONFIG_REQUEST로 보내고, LobbyMessageHandler가 config와 maxPlayers를 꺼내 넘긴다.
+     * config 값의 범위는 GameConfig가 만들어질 때 이미 검증된다.
      * 검증 순서: 없는 방 ROOM_NOT_FOUND → 시작한 방 ROOM_ALREADY_STARTED → 방장 아님 NOT_HOST
-     * → 설정이 없음(null) INVALID_STATE. 실패하면 방은 그대로다.
+     * → 설정이 없음(null) INVALID_STATE → 최대 인원이 2~4가 아니거나 지금 인원보다 적음 INVALID_MAX_PLAYERS.
+     * 실패하면 방은 그대로다.
      */
-    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config) {
+    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers) {
         Room room = findRoom(roomId);
         if (room.getStatus() != RoomStatus.WAITING) {
             throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
@@ -204,8 +205,12 @@ public class LobbyService {
         if (config == null) {
             throw new GameException(LobbyErrorCode.INVALID_STATE);
         }
+        if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS || maxPlayers < room.size()) {
+            throw new GameException(LobbyErrorCode.INVALID_MAX_PLAYERS);
+        }
 
         room.setConfig(config);
+        room.setMaxPlayers(maxPlayers);
         repository.save(room);
         return toInfo(room);
     }
