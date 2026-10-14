@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
@@ -102,6 +103,16 @@ public class LobbyService {
                 .map(Room::getRoomId);
     }
 
+    /** 방에 사람이 한 명이라도 있는지. (봇만 남았는지 가릴 때 쓴다) */
+    private boolean hasHuman(Room room) {
+        return room.memberIds().stream().anyMatch(id -> !BotService.isBotId(id));
+    }
+
+    /** 가장 먼저 참가한 사람. 새 방장을 고를 때 쓴다. 사람이 없으면 예외. */
+    private long firstHuman(Room room) {
+        return room.memberIds().stream().filter(id -> !BotService.isBotId(id)).findFirst().orElseThrow();
+    }
+
     /** 이 플레이어가 들어 있는 방. 어느 방에도 없으면 NOT_IN_ROOM. */
     public synchronized RoomInfo findRoomByPlayer(long playerId) {
         return toInfo(findRoom(roomIdOf(playerId)));
@@ -144,12 +155,12 @@ public class LobbyService {
         }
 
         room.removeMember(playerId);
-        if (room.isEmpty()) {
+        if (!hasHuman(room)) {
             repository.deleteById(roomId);
             return false;
         }
         if (room.getHostId() == playerId) {
-            long newHostId = room.memberIds().getFirst();
+            long newHostId = firstHuman(room);
             room.setHostId(newHostId);
             room.setReady(newHostId, true); // 방장은 항상 준비 상태
         }
@@ -169,9 +180,35 @@ public class LobbyService {
                 .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
-                room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(), players));
+                room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(),
+                room.getConfig(), players, room.getMaxPlayers()));
     }
 
+    // ==== 방 설정 ====
+
+    /**
+     * 방장이 게임 설정을 바꾼다. 최대 인원은 바꾸지 않는다.
+     * 클라는 ROOM_UPDATED 타입으로 RoomUpdatedPayload를 보내고, 요청을 받는 쪽이 그 안의 config만 꺼내 넘긴다.
+     * 값의 범위는 GameConfig가 만들어질 때 이미 검증된다.
+     * 검증 순서: 없는 방 ROOM_NOT_FOUND → 시작한 방 ROOM_ALREADY_STARTED → 방장 아님 NOT_HOST
+     * → 설정이 없음(null) INVALID_STATE. 실패하면 방은 그대로다.
+     */
+    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config) {
+        Room room = findRoom(roomId);
+        if (room.getStatus() != RoomStatus.WAITING) {
+            throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
+        }
+        if (room.getHostId() != playerId) {
+            throw new GameException(LobbyErrorCode.NOT_HOST);
+        }
+        if (config == null) {
+            throw new GameException(LobbyErrorCode.INVALID_STATE);
+        }
+
+        room.setConfig(config);
+        repository.save(room);
+        return toInfo(room);
+    }
 
     // ==== 준비 / 시작 ====
 
@@ -219,14 +256,13 @@ public class LobbyService {
         }
 
         Map<Long, String> nickNameMap = new HashMap<>();
+        Set<Long> botIds = new HashSet<>();
         for (long memberId : room.memberIds()) {
-            String nickname = playerService.findMe(memberId).getNickname();
-            nickNameMap.put(memberId, nickname == null ? "" : nickname);
+            nickNameMap.put(memberId, room.nicknameOf(memberId));
+            if (BotService.isBotId(memberId)) { botIds.add(memberId); }
         }
 
-        Set<Long> botIds = new HashSet<>();
-
-        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds);
+        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, room.getConfig());
         room.setStatus(RoomStatus.PLAYING);
         repository.save(room);
         return toInfo(room);
@@ -254,7 +290,7 @@ public class LobbyService {
         repository.findById(event.roomId()).ifPresent(room -> {
             room.setStatus(RoomStatus.WAITING);
             room.memberIds().stream()
-                    .filter(id -> id != room.getHostId())
+                    .filter(id -> id != room.getHostId() && !BotService.isBotId(id))
                     .forEach(id -> room.setReady(id, false));
             repository.save(room);
         });

@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.state;
 
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -14,11 +15,12 @@ import java.util.*;
 @Getter
 public class Room {
     private final String roomId;
-    private final int mapId;
-    private final int maxPlayers;
 
     @Setter
     private long hostId;
+
+    private final int mapId;
+    private final int maxPlayers;
 
     @Setter
     private RoomStatus status = RoomStatus.WAITING;
@@ -31,12 +33,20 @@ public class Room {
     @Getter(AccessLevel.NONE)
     private final Map<Long, String> nicknames = new HashMap<>();
 
+    /** 게임 설정. 방장이 바꿀 수 있고, 게임이 시작될 때 startGame에 넘긴다. 맵 번호도 여기에 있다. */
+    @Setter
+    private GameConfig config;
+
     public Room(String roomId, long hostId, int mapId, int maxPlayers) {
         this.roomId = roomId;
         this.hostId = hostId;
         this.mapId = mapId;
         this.maxPlayers = maxPlayers;
+        this.config = GameConfig.defaults().withMapId(mapId);
     }
+
+    /** 맵 번호. 게임 설정(config)에 들어 있는 값이다. */
+    public int getMapId() { return config.mapId(); }
 
     public boolean hasMember(long playerId) {
         return members.containsKey(playerId);
