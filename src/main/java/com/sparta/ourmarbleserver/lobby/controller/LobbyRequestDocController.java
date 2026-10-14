@@ -59,9 +59,9 @@ public class LobbyRequestDocController {
     public void startGame() {
     }
 
-    @Operation(summary = "방목록새로고침", description = "type: REFRESH_ROOM_LIST. 대기 중인 방 목록을 다시 요청한다. 요청 본문은 없다. 결과는 ROOM_LIST 알림으로 요청자에게만 간다.")
+    @Operation(summary = "방목록새로고침", description = "type: ROOM_LIST_REQUEST. 대기 중인 방 목록을 다시 요청한다. 요청 본문은 없다. 결과는 ROOM_LIST 알림으로 요청자에게만 간다.")
     @ApiResponse(responseCode = "200", description = "응답 없음. 성공하면 방 목록(ROOM_LIST)이 요청자에게만 가고, 실패하면 ERROR가 요청자에게만 간다.")
-    @PostMapping("/refresh-room-list")
-    public void refreshRoomList() {
+    @PostMapping("/room-list-request")
+    public void roomListRequest() {
     }
 }

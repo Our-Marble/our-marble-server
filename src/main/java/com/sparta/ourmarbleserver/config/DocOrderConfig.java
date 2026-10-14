@@ -40,7 +40,7 @@ public class DocOrderConfig {
             "/docs/requests/leave-room",
             "/docs/requests/set-ready",
             "/docs/requests/start-game",
-            "/docs/requests/refresh-room-list",
+            "/docs/requests/room-list-request",
             "/docs/notifications/connected",
             "/docs/notifications/room-entered",
             "/docs/notifications/room-left",

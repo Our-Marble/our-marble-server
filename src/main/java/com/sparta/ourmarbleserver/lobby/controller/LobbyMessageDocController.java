@@ -52,7 +52,7 @@ public class LobbyMessageDocController {
     public void roomLeft() {
     }
 
-    @Operation(summary = "방목록", description = "요청 REFRESH_ROOM_LIST → 알림 ROOM_LIST. 대기 중인 방 목록으로, 요청자에게만 간다. 방이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)")
+    @Operation(summary = "방목록", description = "요청 ROOM_LIST_REQUEST → 알림 ROOM_LIST. 대기 중인 방 목록으로, 요청자에게만 간다. 방이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)")
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = RoomListPayload.class),
                     examples = @ExampleObject(value = "{\"rooms\": [{\"roomId\": \"r_3\", \"hostNickname\": \"철수\", \"mapId\": 1, \"playerCount\": 2}]}")))
