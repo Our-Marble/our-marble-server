@@ -53,7 +53,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
             nickname = playerService.findMe(playerId).getNickname();
         } catch (ResponseStatusException e) {
             // 토큰은 유효하지만 회원이 없음 (탈퇴 등) > 연결 거부
-            log.info("[WS] 연결 거부: 회원 없음 plyaer={}", playerId);
+            log.info("[WS] 연결 거부: 회원 없음 player={}", playerId);
             session.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
