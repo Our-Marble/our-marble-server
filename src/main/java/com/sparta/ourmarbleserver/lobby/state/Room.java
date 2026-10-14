@@ -33,10 +33,6 @@ public class Room {
     @Getter(AccessLevel.NONE)
     private final Map<Long, String> nicknames = new HashMap<>();
 
-    /** 방 이름. 방장이 바꿀 수 있다. */
-    @Setter
-    private String roomName = "";
-
     /** 게임 설정. 방장이 바꿀 수 있고, 게임이 시작될 때 startGame에 넘긴다. 맵 번호도 여기에 있다. */
     @Setter
     private GameConfig config;

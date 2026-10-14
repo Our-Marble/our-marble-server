@@ -17,14 +17,14 @@ public record RoomUpdatedPayload(RoomSnapshot room) {
 
     /**
      * 방 한 개의 현재 상태. status는 RoomStatus 이름(WAITING, PLAYING)이다.
-     * roomName은 방장이 정한 방 이름, config는 방장이 정한 게임 설정이다.
+     * config는 방장이 정한 게임 설정, maxPlayers는 방의 최대 인원이다.
      */
-    public record RoomSnapshot(String roomId, String roomName, long hostId, int mapId, RoomStatus status,
-                               GameConfig config, List<PlayerSnapshot> players) {
+    public record RoomSnapshot(String roomId, long hostId, int mapId, RoomStatus status,
+                               GameConfig config, List<PlayerSnapshot> players, int maxPlayers) {
 
-        /** 방 이름과 설정 없이 만든다. (기본 설정, 빈 이름) */
+        /** 설정과 최대 인원 없이 만든다. (기본 설정, 최대 인원 4명) */
         public RoomSnapshot(String roomId, long hostId, int mapId, RoomStatus status, List<PlayerSnapshot> players) {
-            this(roomId, "", hostId, mapId, status, GameConfig.defaults().withMapId(mapId), players);
+            this(roomId, hostId, mapId, status, GameConfig.defaults().withMapId(mapId), players, GameConfig.MAX_PLAYERS);
         }
     }
 

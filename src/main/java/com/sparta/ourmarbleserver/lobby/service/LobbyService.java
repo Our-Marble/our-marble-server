@@ -58,7 +58,6 @@ public class LobbyService {
         Room room = new Room(repository.nextRoomId(), playerId, mapId, maxPlayers);
         room.addMember(playerId, true);
         room.setNickname(playerId, nicknameOf(playerId));
-        room.setRoomName(room.nicknameOf(playerId)+"의 방"); // 방장이 바꾸기 전의 기본 이름
         repository.save(room);
         return toInfo(room);
     }
@@ -181,8 +180,8 @@ public class LobbyService {
                 .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
-                room.getRoomId(), room.getRoomName(), room.getHostId(), room.getMapId(), room.getStatus(),
-                room.getConfig(), players));
+                room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(),
+                room.getConfig(), players, room.getMaxPlayers()));
     }
 
 
