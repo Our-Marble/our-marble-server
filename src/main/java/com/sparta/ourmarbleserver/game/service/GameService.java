@@ -360,9 +360,13 @@ public class GameService {
             timerService.cancel(state.getRoomId());
             return;
         }
-        int seconds = state.currentPlayer().isBot() ? BOT_DELAY_SECONDS : state.getConfig().limitTimeSeconds();
+        if (state.currentPlayer().isBot()) {
+            timerService.startBot(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
+                    state.getPhase(), BOT_DELAY_SECONDS);
+            return;
+        }
         timerService.start(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
-                state.getPhase(), seconds);
+                state.getPhase(), state.getConfig().limitTimeSeconds());
     }
 
     /**
