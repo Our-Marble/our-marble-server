@@ -25,7 +25,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class GameRequestDocController {
 
     private static final String NO_RESPONSE =
-            "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 ERROR가 요청자에게만 간다.";
+            "응답 없음. 성공하면 결과 알림이 방 전원에게 가고, 실패하면 GAME_ERROR가 요청자에게만 간다. (메시지 형식이 틀리면 COMMON_ERROR)";
 
     @Operation(summary = "건설", description = "type: BUILD. 내 땅에 도착했을 때 한 단계 건설하거나 거절한다. 결과는 BUILT 알림으로 간다.")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
