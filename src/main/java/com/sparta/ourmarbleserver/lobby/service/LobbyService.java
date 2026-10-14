@@ -181,7 +181,8 @@ public class LobbyService {
                 .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
-                room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(), players));
+                room.getRoomId(), room.getRoomName(), room.getHostId(), room.getMapId(), room.getStatus(),
+                room.getConfig(), players));
     }
 
 

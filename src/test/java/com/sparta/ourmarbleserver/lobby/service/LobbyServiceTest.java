@@ -664,4 +664,42 @@ class LobbyServiceTest {
         assertThat(saved.getMapId()).isEqualTo(3);
         assertThat(room.mapId()).isEqualTo(3);
     }
+
+
+    // ===== ROOM_UPDATED의 방 이름과 설정 =====
+
+    @Test
+    void ROOM_UPDATED에_방_이름과_기본_설정이_담긴다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+
+        assertThat(snapshot.roomName()).isEqualTo("닉1의 방");
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
+    }
+
+    @Test
+    void ROOM_UPDATED는_방에_저장된_이름과_설정을_그대로_싣는다() {
+        RoomInfo info = service.createRoom(HOST, MAP, 4);
+        Room room = repository.findById(info.roomId()).orElseThrow();
+        GameConfig config = new GameConfig(1_000_000L, 20_000L, 50_000L, 10, 2, 3, 30);
+        room.setRoomName("친구들 방");
+        room.setConfig(config);
+        repository.save(room);
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(info.roomId()).room();
+
+        assertThat(snapshot.roomName()).isEqualTo("친구들 방");
+        assertThat(snapshot.config()).isEqualTo(config);
+        assertThat(snapshot.mapId()).isEqualTo(3);
+    }
+
+    @Test
+    void 방_이름과_설정_없이_만든_RoomSnapshot은_빈_이름과_기본_설정을_가진다() {
+        RoomUpdatedPayload.RoomSnapshot snapshot =
+                new RoomUpdatedPayload.RoomSnapshot("r_3", 1L, 2, RoomStatus.WAITING, List.of());
+
+        assertThat(snapshot.roomName()).isEmpty();
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(2));
+    }
 }
