@@ -80,7 +80,13 @@ public class RedisRoomRepository implements RoomRepository {
 
     @Override
     public String nextRoomId() {
-        return "r_" + redisTemplate.opsForValue().increment(ROOM_SEQ_KEY);   // 서버가 여러 대여도 겹치지 않는다
+        // 번호표(room-seq)가 초기화돼도 살아 있는 방을 덮어쓰지 않도록, 이미 있는 번호는 건너뛴다
+        while (true) {
+            String roomId = "r_" + redisTemplate.opsForValue().increment(ROOM_SEQ_KEY);
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(roomKey(roomId)))) {
+                return roomId;
+            }
+        }
     }
 
     // JSON to StoredRoom
