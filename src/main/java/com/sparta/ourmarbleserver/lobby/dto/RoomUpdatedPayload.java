@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.dto;
 
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
 
 import java.util.List;
@@ -9,7 +10,11 @@ import java.util.List;
  * <pre>
  * { "topic": "LOBBY", "type": "ROOM_UPDATED",
  *   "room": { "roomId": "r_3", "hostId": 7, "mapId": 1, "status": "WAITING",
- *             "players": [ { "playerId": 1, "nickname": "Alice", "ready": true } ] } }
+ *       "players": [
+ *         { "playerId": 1,  "nickname": "닉1", "ready": false, "bot": false },
+ *        { "playerId": -1, "nickname": "봇1", "ready": true,  "bot": true }
+ *      ] }
+ * }
  * </pre>
  * players의 순서가 참가 순서이고, 게임 시작 시 턴 순서가 된다. 방장은 항상 ready=true다.
  *
@@ -30,7 +35,12 @@ public record RoomUpdatedPayload(RoomSnapshot room) {
         }
     }
 
-    /** 방에 참가한 플레이어. */
-    public record PlayerSnapshot(long playerId, String nickname, boolean ready) {
+    /** 방에 참가한 플레이어. bot이 true면 서버가 대신 움직이는 봇이다. (봇은 항상 ready=true) */
+    public record PlayerSnapshot(long playerId, String nickname, boolean ready, boolean bot) {
+
+        /** bot 값을 안 주는 기존 호출용. 번호로 봇인지 정한다. (음수면 봇) */
+        public PlayerSnapshot(long playerId, String nickname, boolean ready) {
+            this(playerId, nickname, ready, BotService.isBotId(playerId));
+        }
     }
 }

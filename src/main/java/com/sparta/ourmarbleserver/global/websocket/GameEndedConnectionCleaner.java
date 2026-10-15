@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.global.websocket;
 
+import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
@@ -31,11 +32,14 @@ public class GameEndedConnectionCleaner {
         String roomId = event.roomId();
         try {
             List<Long> disconnected = lobbyService.memberIdsOf(roomId).stream()
+                    .filter(id -> !BotService.isBotId(id))
                     .filter(id -> !sessionRegistry.isConnected(id))
                     .toList();
+
             if (disconnected.isEmpty()) {
                 return;
             }
+
             log.info("[WS] 게임 종료 후 끊긴 멤버 정리: room={} players={}", roomId, disconnected);
             if (lobbyService.removeMembers(roomId, disconnected)) {
                 sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));

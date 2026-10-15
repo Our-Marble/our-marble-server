@@ -13,6 +13,7 @@ import com.sparta.ourmarbleserver.lobby.dto.RoomUpdatedPayload;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -82,31 +83,51 @@ class LobbyMessageHandlerTest {
         when(lobbyService.roomIdOf(1L)).thenReturn("r_1");
         when(lobbyService.roomUpdated("r_1")).thenReturn(updated);
 
-        handler.handle(MessageType.ROOM_CONFIG_REQUEST, 1L, configBody(NEW_CONFIG, 3));
+        handler.handle(MessageType.ROOM_CONFIG_REQUEST, 1L, configBody(NEW_CONFIG, 3, 1));
 
         InOrder order = inOrder(lobbyService, sender);
-        order.verify(lobbyService).setRoomConfig("r_1", 1L, NEW_CONFIG, 3);         // 설정과 최대 인원을 그대로 전달
-        order.verify(sender).sendToRoom("r_1", MessageType.ROOM_UPDATED, updated);  // 바꾼 뒤에 방 전원에게 알림
+        order.verify(lobbyService).setRoomConfig("r_1", 1L, NEW_CONFIG, 3, 1);       // 설정·최대 인원·봇 수를 그대로 전달
+        order.verify(sender).sendToRoom("r_1", MessageType.ROOM_UPDATED, updated);   // 바꾼 뒤에 방 전원에게 알림
         verify(sender, never()).sendToPlayer(anyLong(), any(), any());
+    }
+
+    @Test
+    void 봇_수나_최대_인원을_빼고_보내면_형식_오류로_거절하고_설정을_바꾸지_않는다() {
+        when(lobbyService.roomIdOf(1L)).thenReturn("r_1");
+
+        ObjectNode noBotCount = configBody(NEW_CONFIG, 3, 1);
+        noBotCount.remove("botCount");
+        ObjectNode noMaxPlayers = configBody(NEW_CONFIG, 3, 1);
+        noMaxPlayers.remove("maxPlayers");
+
+        // int 필드가 없으면 Jackson 3은 0을 넣지 않고 예외를 던진다 → MainWebSocketHandler가 COMMON_ERROR / INVALID_MESSAGE로 응답
+        assertThatThrownBy(() -> handler.handle(MessageType.ROOM_CONFIG_REQUEST, 1L, noBotCount))
+                .isInstanceOf(JacksonException.class);
+        assertThatThrownBy(() -> handler.handle(MessageType.ROOM_CONFIG_REQUEST, 1L, noMaxPlayers))
+                .isInstanceOf(JacksonException.class);
+
+        verify(lobbyService, never()).setRoomConfig(anyString(), anyLong(), any(), anyInt(), anyInt());
+        verify(sender, never()).sendToRoom(anyString(), any(), any());
     }
 
     @Test
     void 방장이_아니면_오류가_그대로_올라가고_알림은_보내지_않는다() {
         when(lobbyService.roomIdOf(2L)).thenReturn("r_1");
         doThrow(new GameException(LobbyErrorCode.NOT_HOST))
-                .when(lobbyService).setRoomConfig("r_1", 2L, NEW_CONFIG, 3);
+                .when(lobbyService).setRoomConfig("r_1", 2L, NEW_CONFIG, 3, 1);
 
-        assertThatThrownBy(() -> handler.handle(MessageType.ROOM_CONFIG_REQUEST, 2L, configBody(NEW_CONFIG, 3)))
+        assertThatThrownBy(() -> handler.handle(MessageType.ROOM_CONFIG_REQUEST, 2L, configBody(NEW_CONFIG, 3, 1)))
                 .isInstanceOfSatisfying(GameException.class,
                         e -> assertThat(e.code()).isEqualTo(LobbyErrorCode.NOT_HOST));
         verify(sender, never()).sendToRoom(anyString(), any(), any());
     }
 
-    /** {"config": {...}, "maxPlayers": n} 모양의 요청 본문. type은 핸들러에 따로 넘기므로 넣지 않는다. */
-    private ObjectNode configBody(GameConfig config, int maxPlayers) {
+    /** {"config": {...}, "maxPlayers": n, "botCount": b} 모양의 요청 본문. type은 핸들러에 따로 넘기므로 넣지 않는다. */
+    private ObjectNode configBody(GameConfig config, int maxPlayers, int botCount) {
         ObjectNode body = objectMapper.createObjectNode();
         body.set("config", objectMapper.valueToTree(config));
         body.put("maxPlayers", maxPlayers);
+        body.put("botCount", botCount);
         return body;
     }
 }

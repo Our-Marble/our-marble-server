@@ -1,9 +1,10 @@
 package com.sparta.ourmarbleserver.bot.service;
 
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 봇을 방에 넣을 때 필요한 번호와 이름을 만든다. (로비가 봇을 추가할 때 부른다)
@@ -11,13 +12,16 @@ import java.util.concurrent.atomic.AtomicLong;
  * 게임은 번호 하나로 플레이어와 게임을 찾으므로, 서로 다른 방의 봇끼리도 번호가 같으면 안 된다.
  */
 @Service
+@RequiredArgsConstructor
 public class BotService {
     private static final String NICKNAME_PREFIX = "봇";
-    private final AtomicLong sequence = new AtomicLong();
+    static final String BOT_SEQ_KEY = "bot:seq";
+
+    private final StringRedisTemplate redisTemplate;
 
     /** 서버 전체에서 겹치지 않는 봇 번호. (-1, -2, -3, ...) */
     public long nextBotId() {
-        return -sequence.incrementAndGet();
+        return -redisTemplate.opsForValue().increment(BOT_SEQ_KEY);
     }
 
     /** 방 안에서 겹치지 않는 봇 이름. 이미 쓰는 이름(usedNicknames)을 뺀 가장 작은 번호를 붙인다. ("봇1", "봇2", ...) */

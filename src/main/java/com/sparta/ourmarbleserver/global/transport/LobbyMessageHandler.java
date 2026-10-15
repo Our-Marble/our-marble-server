@@ -90,7 +90,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
     // 방장이 설정(게임 설정 + 최대 인원)을 바꾸면 방 전원에게 새 설정이 담긴 ROOM_UPDATED
     private void setRoomConfig(long playerId, RoomConfigRequestPayload request) {
         String roomId = lobbyService.roomIdOf(playerId);   // 방에 없으면 NOT_IN_ROOM
-        lobbyService.setRoomConfig(roomId, playerId, request.config(), request.maxPlayers());
+        lobbyService.setRoomConfig(roomId, playerId, request.config(), request.maxPlayers(), request.botCount());
         sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
     }
 

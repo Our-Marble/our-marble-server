@@ -33,6 +33,7 @@ public class LobbyService {
     private final RoomRepository repository;
     private final GameService gameService;
     private final PlayerService playerService;
+    private final BotService botService;
 
     // ==== 방 만들기 / 조회 ====
 
@@ -177,7 +178,7 @@ public class LobbyService {
     public synchronized RoomUpdatedPayload roomUpdated(String roomId) {
         Room room = findRoom(roomId);
         List<RoomUpdatedPayload.PlayerSnapshot> players = room.memberIds().stream()
-                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
+                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id), BotService.isBotId(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
                 room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(),
@@ -187,14 +188,16 @@ public class LobbyService {
     // ==== 방 설정 ====
 
     /**
-     * 방장이 게임 설정과 최대 인원을 바꾼다.
+     * 방장이 게임 설정과 최대 인원, 봇 수를 바꾼다.
      * 클라는 ROOM_CONFIG_REQUEST로 보내고, LobbyMessageHandler가 config와 maxPlayers를 꺼내 넘긴다.
      * config 값의 범위는 GameConfig가 만들어질 때 이미 검증된다.
      * 검증 순서: 없는 방 ROOM_NOT_FOUND → 시작한 방 ROOM_ALREADY_STARTED → 방장 아님 NOT_HOST
-     * → 설정이 없음(null) INVALID_STATE → 최대 인원이 2~4가 아니거나 지금 인원보다 적음 INVALID_MAX_PLAYERS.
+     * → 설정이 없음(null) INVALID_STATE
+     * → 최대 인원이 2~4가 아니거나 지금 사람 수보다 적음 INVALID_MAX_PLAYERS.
+     * → 봇 수가 음수이거나 사람 + 봇이 최대 인원을 넘음 INVALID_BOT_COUNT.
      * 실패하면 방은 그대로다.
      */
-    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers) {
+    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers, int botCount) {
         Room room = findRoom(roomId);
         if (room.getStatus() != RoomStatus.WAITING) {
             throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
@@ -205,14 +208,40 @@ public class LobbyService {
         if (config == null) {
             throw new GameException(LobbyErrorCode.INVALID_STATE);
         }
-        if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS || maxPlayers < room.size()) {
+
+        int humans = humanCount(room);
+        if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS || maxPlayers < humans) {
             throw new GameException(LobbyErrorCode.INVALID_MAX_PLAYERS);
+        }
+        if (botCount < 0 || humans + botCount > maxPlayers) {
+            throw new GameException(LobbyErrorCode.INVALID_BOT_COUNT);
         }
 
         room.setConfig(config);
         room.setMaxPlayers(maxPlayers);
+        syncBots(room, botCount);
         repository.save(room);
         return toInfo(room);
+    }
+
+    // 방에 있는 사람 수 (봇 제외)
+    private int humanCount(Room room) {
+        return (int) room.memberIds().stream().filter(id -> !BotService.isBotId(id)).count();
+    }
+
+    private void syncBots(Room room, int target) {
+        List<Long> bots = room.memberIds().stream().filter(BotService::isBotId).toList();
+
+        for(int i = bots.size() - 1; i >= target; i--) {    // 많으면 제거
+            room.removeMember(bots.get(i));
+        }
+
+        for(int i = bots.size(); i < target; i++) {         // 부족하면 추가
+            List<String> used = room.memberIds().stream().map(room::nicknameOf).toList();
+            long botId = botService.nextBotId();
+            room.addMember(botId, true);
+            room.setNickname(botId, botService.nextNickname(used));
+        }
     }
 
     // ==== 준비 / 시작 ====
