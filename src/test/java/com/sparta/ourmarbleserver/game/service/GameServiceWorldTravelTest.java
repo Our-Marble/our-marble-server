@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.game.service;
 
+import com.sparta.ourmarbleserver.economy.service.EconomyService;
 import com.sparta.ourmarbleserver.game.dto.DestinationChosenPayload;
 import com.sparta.ourmarbleserver.game.dto.GameResult;
 import com.sparta.ourmarbleserver.game.state.GameState;
@@ -92,25 +93,45 @@ class GameServiceWorldTravelTest {
     }
 
     @Test
-    void 목적지를_고르면_월급_없이_이동하고_도착_칸을_처리한다() {
+    void 목적지를_고르면_이동하고_출발_지점을_지나면_월급을_받고_도착_칸을_처리한다() {
         GameService service = newServiceChoosing();
 
-        service.chooseDestination(1L, 3);   // 3번 칸 (땅 103, 빈 땅)
+        service.chooseDestination(1L, 3);   // 3번 칸 (땅 103, 빈 땅), 24 → 3은 출발 지점을 지남
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(3);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
-        assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
+        assertThat(state().getPlayerState(1L).getMoney())
+                .isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT);
     }
 
     @Test
-    void 출발_지점을_지나는_방향의_목적지여도_월급은_없다() {
+    void 출발_지점을_지나는_방향의_목적지면_월급을_받는다() {
         GameService service = newServiceChoosing();
 
         service.chooseDestination(1L, 1);   // 24 → 1은 출발 지점을 지나는 방향
 
         assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(1);
+        assertThat(state().getPlayerState(1L).getMoney())
+                .isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT);
+    }
+
+    @Test
+    void 출발_지점을_지나지_않는_목적지는_월급이_없고_출발_칸은_월급을_받는다() {
+        GameService behind = newServiceChoosing();
+        behind.chooseDestination(1L, 25);   // 24보다 큰 칸: 출발 지점을 지나지 않음
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
+    }
+
+    @Test
+    void 목적지가_출발_칸이어도_월급을_받는다() {
+        GameService service = newServiceChoosing();
+
+        service.chooseDestination(1L, 0);   // 출발 칸에 도착
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(0);
+        assertThat(state().getPlayerState(1L).getMoney())
+                .isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT);
     }
 
     @Test
@@ -135,7 +156,8 @@ class GameServiceWorldTravelTest {
 
         service.chooseDestination(1L, 3);
 
-        assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - toll);
+        assertThat(state().getPlayerState(1L).getMoney())
+                .isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT - toll);
         assertThat(state().getPlayerState(2L).getMoney()).isEqualTo(GameService.START_MONEY + toll);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_ACQUIRE);
     }
