@@ -267,7 +267,7 @@ public class GameService {
     // ===== 세계여행 =====
 
     /**
-     * 세계여행 칸에서 시작한 턴에 목적지를 골라 월급 없이 이동하고, 도착한 칸을 처리한다.
+     * 세계여행 칸에서 시작한 턴에 목적지를 골라 이동하고(출발 지점을 지나면 월급), 도착한 칸을 처리한다.
      * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 세계여행 칸을 뺀 어디든 고를 수 있다.
      */
     public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
@@ -284,7 +284,10 @@ public class GameService {
 
         GameResult result = GameResult.of(state.getRoomId(), MessageType.DESTINATION_CHOSEN, new DestinationChosenPayload(playerId, destinationPosition));
 
-        moveService.moveDirectly(player, destinationPosition);
+        MoveService.MoveResult move = moveService.moveTo(player, destinationPosition);
+        if (move.passedStart()) {
+            economyService.paySalary(player, state.getConfig().salaryAmount());   // 출발 지점을 지나면 월급
+        }
         arrivalService.processArrival(state, player);
 
         save(state);
@@ -344,7 +347,7 @@ public class GameService {
         repository.save(state);
         restartTimer(state);
         if (justEnded) {
-            eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
+            eventPublisher.publishEvent(GameEndedEvent.of(state));
         }
     }
 

@@ -29,7 +29,7 @@ public class MoveService {
         return new MoveResult(from, target, target < from);
     }
 
-    /** 칸으로 바로 이동한다. 월급은 없다. (무인도 이동, 세계여행, 뒤로가는 카드) */
+    /** 칸으로 바로 이동한다. 월급은 없다. (무인도 이동, 뒤로가는 카드) */
     public MoveResult moveDirectly(PlayerState player, int target) {
         int from = player.getPosition();
         player.setPosition(target);
