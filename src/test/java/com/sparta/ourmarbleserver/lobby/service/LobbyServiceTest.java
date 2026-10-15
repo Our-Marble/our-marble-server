@@ -16,9 +16,12 @@ import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -80,7 +83,18 @@ class LobbyServiceTest {
     private final RecordingGameService gameService = new RecordingGameService();
     private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final LobbyService service =
-            new LobbyService(repository, gameService.mock, new FakePlayerService());
+            new LobbyService(repository, gameService.mock, new FakePlayerService(), newBotService());
+
+    /** Redis INCR 대신 메모리 카운터로 번호를 주는 진짜 BotService. (-1, -2, ...) */
+    @SuppressWarnings("unchecked")
+    private static BotService newBotService() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> valueOps = mock(ValueOperations.class);
+        AtomicLong counter = new AtomicLong();
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(anyString())).thenAnswer(invocation -> counter.incrementAndGet());
+        return new BotService(redisTemplate);
+    }
 
     private static void assertError(ErrorCode code, Runnable action) {
         assertThatThrownBy(action::run)
@@ -730,7 +744,7 @@ class LobbyServiceTest {
     void 방장이_설정을_바꾸면_ROOM_UPDATED에_반영된다() {
         RoomInfo room = roomWithTwo();
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3, 0);
 
         RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
         assertThat(snapshot.config()).isEqualTo(NEW_CONFIG);
@@ -742,7 +756,7 @@ class LobbyServiceTest {
     void 최대_인원을_줄이면_그_인원까지만_들어올_수_있다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2, 0);
 
         service.join(room.roomId(), P2);
         assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
@@ -754,7 +768,7 @@ class LobbyServiceTest {
         service.join(room.roomId(), P2);
         assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3, 0);
 
         service.join(room.roomId(), P3);
         assertThat(service.roomUpdated(room.roomId()).room().players()).hasSize(3);
@@ -764,8 +778,8 @@ class LobbyServiceTest {
     void 최대_인원이_2에서_4가_아니면_거부하고_방은_그대로다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 1));
-        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 5));
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 1, 0));
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 5, 0));
 
         RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
         assertThat(snapshot.maxPlayers()).isEqualTo(4);
@@ -773,22 +787,22 @@ class LobbyServiceTest {
     }
 
     @Test
-    void 지금_인원보다_적게_줄이면_거부한다() {
+    void 지금_사람_수보다_적게_줄이면_거부한다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
         service.join(room.roomId(), P2);
         service.join(room.roomId(), P3);   // 3명
 
-        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2));
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2, 0));
         assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(4);
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);   // 지금 인원과 같으면 허용
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3, 0);   // 지금 인원과 같으면 허용
         assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(3);
     }
 
     @Test
     void 바꾼_설정으로_게임을_시작한다() {
         RoomInfo room = roomWithTwo();
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 0);
         service.setReady(room.roomId(), P2, true);
 
         service.start(room.roomId(), HOST);
@@ -799,19 +813,138 @@ class LobbyServiceTest {
     @Test
     void 방장이_아니거나_시작한_방이거나_없는_방이면_설정을_바꿀_수_없다() {
         RoomInfo room = roomWithTwo();
-        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG, 4));
-        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG, 4));
+        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG, 4, 0));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG, 4, 0));
 
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
-        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4));
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 0));
     }
 
     @Test
     void 설정이_없으면_INVALID_STATE이고_방은_그대로다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null, 4));
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null, 4, 0));
         assertThat(service.roomUpdated(room.roomId()).room().config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
+    }
+
+    // ===== 방장의 봇 수 설정 (ROOM_CONFIG_REQUEST의 botCount) =====
+
+    @Test
+    void 봇_수를_정하면_봇이_준비_상태로_뒤에_추가된다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 2);
+
+        List<RoomUpdatedPayload.PlayerSnapshot> players = service.roomUpdated(room.roomId()).room().players();
+        assertThat(players).hasSize(3);
+        assertThat(players.get(0).playerId()).isEqualTo(HOST);                 // 사람이 앞
+        assertThat(players.subList(1, 3)).allSatisfy(p -> {
+            assertThat(BotService.isBotId(p.playerId())).isTrue();
+            assertThat(p.ready()).isTrue();                                     // 봇은 항상 준비
+        });
+        assertThat(players.subList(1, 3))
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::nickname)
+                .containsExactly("봇1", "봇2");
+    }
+
+    @Test
+    void 봇_수를_줄이면_나중에_들어온_봇부터_빠진다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 2);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 1);
+
+        assertThat(service.roomUpdated(room.roomId()).room().players())
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::nickname)
+                .containsExactly("닉1", "봇1");
+    }
+
+    @Test
+    void 봇_수가_같으면_봇을_새로_만들지_않는다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 1);
+        long botId = service.roomUpdated(room.roomId()).room().players().get(1).playerId();
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 1);
+
+        assertThat(service.roomUpdated(room.roomId()).room().players().get(1).playerId()).isEqualTo(botId);
+    }
+
+    @Test
+    void 봇_수를_0으로_하면_봇이_모두_빠진다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 3);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 0);
+
+        assertThat(service.roomUpdated(room.roomId()).room().players())
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::playerId)
+                .containsExactly(HOST);
+    }
+
+    @Test
+    void 봇이_자리를_차지하면_사람은_들어올_수_없다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 2);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2, 1);
+
+        assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P2));
+    }
+
+    @Test
+    void 사람과_봇을_합쳐_최대_인원을_넘거나_봇_수가_음수면_거부하고_방은_그대로다() {
+        RoomInfo room = roomWithTwo();   // 사람 2명
+
+        assertError(LobbyErrorCode.INVALID_BOT_COUNT, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3, 2));
+        assertError(LobbyErrorCode.INVALID_BOT_COUNT, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, -1));
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.players()).hasSize(2);
+        assertThat(snapshot.maxPlayers()).isEqualTo(4);                               // 최대 인원도 안 바뀜
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(MAP)); // 설정도 안 바뀜
+    }
+
+    @Test
+    void 봇이_있어도_최대_인원은_사람_수_기준으로_줄일_수_있다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 3);   // 사람 1 + 봇 3 = 4명
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2, 1);   // 사람 1 + 봇 1 = 2명
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.players()).hasSize(2);
+        assertThat(snapshot.maxPlayers()).isEqualTo(2);
+    }
+
+    @Test
+    void 서로_다른_방의_봇도_번호가_겹치지_않는다() {
+        RoomInfo first = service.createRoom(HOST, MAP, 4);
+        RoomInfo second = service.createRoom(P2, MAP, 4);
+
+        service.setRoomConfig(first.roomId(), HOST, NEW_CONFIG, 4, 2);
+        service.setRoomConfig(second.roomId(), P2, NEW_CONFIG, 4, 2);
+
+        List<Long> botIds = new ArrayList<>();
+        for (RoomInfo room : List.of(first, second)) {
+            service.roomUpdated(room.roomId()).room().players().stream()
+                    .map(RoomUpdatedPayload.PlayerSnapshot::playerId)
+                    .filter(BotService::isBotId)
+                    .forEach(botIds::add);
+        }
+        assertThat(botIds).hasSize(4).doesNotHaveDuplicates();   // 이름은 방마다 봇1, 봇2지만 번호는 다르다
+    }
+
+    @Test
+    void 설정으로_추가한_봇과_함께_시작하면_봇_번호가_게임에_넘어간다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 1);
+
+        service.start(room.roomId(), HOST);   // 방장 + 봇 1 = 2명, 봇은 준비 상태라 바로 시작 가능
+
+        assertThat(gameService.playerIds).hasSize(2);
+        assertThat(gameService.botIds).hasSize(1).allMatch(BotService::isBotId);
+        assertThat(gameService.nicknames).containsValue("봇1");
+        assertThat(gameService.config).isEqualTo(NEW_CONFIG);
     }
 }
