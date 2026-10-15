@@ -947,4 +947,15 @@ class LobbyServiceTest {
         assertThat(gameService.nicknames).containsValue("봇1");
         assertThat(gameService.config).isEqualTo(NEW_CONFIG);
     }
+
+    @Test
+    void ROOM_UPDATED에서_봇은_bot이_true다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4, 1);
+
+        assertThat(service.roomUpdated(room.roomId()).room().players())
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::nickname, RoomUpdatedPayload.PlayerSnapshot::bot)
+                .containsExactly(Tuple.tuple("닉1", false), Tuple.tuple("봇1", true));
+    }
 }

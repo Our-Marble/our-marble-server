@@ -178,7 +178,7 @@ public class LobbyService {
     public synchronized RoomUpdatedPayload roomUpdated(String roomId) {
         Room room = findRoom(roomId);
         List<RoomUpdatedPayload.PlayerSnapshot> players = room.memberIds().stream()
-                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id)))
+                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id), BotService.isBotId(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
                 room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(),
