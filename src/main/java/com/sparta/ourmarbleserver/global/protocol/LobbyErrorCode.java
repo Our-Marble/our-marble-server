@@ -10,7 +10,8 @@ public enum LobbyErrorCode implements ErrorCode {
     NOT_HOST("방장만 할 수 있습니다."),
     ROOM_ALREADY_STARTED("이미 시작한 방입니다."),
     NOT_ENOUGH_PLAYERS("최소 2명이 필요합니다."),
-    NOT_ALL_READY("모두 준비해야 시작할 수 있습니다.");
+    NOT_ALL_READY("모두 준비해야 시작할 수 있습니다."),
+    INVALID_MAX_PLAYERS("최대 인원은 2~4명이고, 지금 방 인원보다 적을 수 없습니다.");
 
     private final String message;
 

@@ -730,26 +730,65 @@ class LobbyServiceTest {
     void 방장이_설정을_바꾸면_ROOM_UPDATED에_반영된다() {
         RoomInfo room = roomWithTwo();
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);
 
         RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
         assertThat(snapshot.config()).isEqualTo(NEW_CONFIG);
         assertThat(snapshot.mapId()).isEqualTo(3);
+        assertThat(snapshot.maxPlayers()).isEqualTo(3);
     }
 
     @Test
-    void 설정을_바꿔도_최대_인원은_그대로다() {
-        RoomInfo room = service.createRoom(HOST, MAP, 3);
+    void 최대_인원을_줄이면_그_인원까지만_들어올_수_있다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2);
 
+        service.join(room.roomId(), P2);
+        assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
+    }
+
+    @Test
+    void 최대_인원을_늘리면_더_들어올_수_있다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 2);
+        service.join(room.roomId(), P2);
+        assertError(LobbyErrorCode.ROOM_FULL, () -> service.join(room.roomId(), P3));
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);
+
+        service.join(room.roomId(), P3);
+        assertThat(service.roomUpdated(room.roomId()).room().players()).hasSize(3);
+    }
+
+    @Test
+    void 최대_인원이_2에서_4가_아니면_거부하고_방은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 1));
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 5));
+
+        RoomUpdatedPayload.RoomSnapshot snapshot = service.roomUpdated(room.roomId()).room();
+        assertThat(snapshot.maxPlayers()).isEqualTo(4);
+        assertThat(snapshot.config()).isEqualTo(GameConfig.defaults().withMapId(MAP));   // 설정도 안 바뀜
+    }
+
+    @Test
+    void 지금_인원보다_적게_줄이면_거부한다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.join(room.roomId(), P2);
+        service.join(room.roomId(), P3);   // 3명
+
+        assertError(LobbyErrorCode.INVALID_MAX_PLAYERS, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 2));
+        assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(4);
+
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 3);   // 지금 인원과 같으면 허용
         assertThat(service.roomUpdated(room.roomId()).room().maxPlayers()).isEqualTo(3);
     }
 
     @Test
     void 바꾼_설정으로_게임을_시작한다() {
         RoomInfo room = roomWithTwo();
-        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG);
+        service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4);
         service.setReady(room.roomId(), P2, true);
 
         service.start(room.roomId(), HOST);
@@ -760,19 +799,19 @@ class LobbyServiceTest {
     @Test
     void 방장이_아니거나_시작한_방이거나_없는_방이면_설정을_바꿀_수_없다() {
         RoomInfo room = roomWithTwo();
-        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG));
-        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG));
+        assertError(LobbyErrorCode.NOT_HOST, () -> service.setRoomConfig(room.roomId(), P2, NEW_CONFIG, 4));
+        assertError(LobbyErrorCode.ROOM_NOT_FOUND, () -> service.setRoomConfig("r_없음", HOST, NEW_CONFIG, 4));
 
         service.setReady(room.roomId(), P2, true);
         service.start(room.roomId(), HOST);
-        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG));
+        assertError(LobbyErrorCode.ROOM_ALREADY_STARTED, () -> service.setRoomConfig(room.roomId(), HOST, NEW_CONFIG, 4));
     }
 
     @Test
     void 설정이_없으면_INVALID_STATE이고_방은_그대로다() {
         RoomInfo room = service.createRoom(HOST, MAP, 4);
 
-        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null));
+        assertError(LobbyErrorCode.INVALID_STATE, () -> service.setRoomConfig(room.roomId(), HOST, null, 4));
         assertThat(service.roomUpdated(room.roomId()).room().config()).isEqualTo(GameConfig.defaults().withMapId(MAP));
     }
 }

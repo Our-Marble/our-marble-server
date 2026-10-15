@@ -41,6 +41,7 @@ public enum MessageType {
     SET_READY,         // 준비 / 준비 취소
     START_GAME,
     ROOM_LIST_REQUEST,
+    ROOM_CONFIG_REQUEST,
 
     // ===== 로비: 서버 -> 클라 알림 =====
     CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
