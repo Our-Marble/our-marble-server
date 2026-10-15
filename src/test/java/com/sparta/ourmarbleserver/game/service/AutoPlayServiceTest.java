@@ -5,11 +5,11 @@ import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
-import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.property.domain.BuildingLevel;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
+import com.sparta.ourmarbleserver.scheduler.repository.InMemoryTimerRepository;
 import com.sparta.ourmarbleserver.scheduler.service.AutoPlayService;
 import com.sparta.ourmarbleserver.scheduler.service.TimerService;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,6 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -29,7 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 시간 초과 대신 진행 테스트. 타이머를 기다리지 않고 onTimeout을 직접 부른다.
+ * 시간 초과 대신 진행 테스트. 타이머를 기다리지 않고 onTimeout을 직접 부른다. (지금 저장된 phase를 대신 진행한다)
  * 알림은 가짜 sender(Mockito mock)로 받아서 방 전원에게 보냈는지만 확인한다.
  * 플레이어 1, 2 중 1번 차례로 시작하고, 3번 칸은 땅 103, 1번 칸은 땅 101, 24번 칸은 세계여행이다.
  */
@@ -46,7 +45,7 @@ class AutoPlayServiceTest {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         service = GameTestSupport.newGameService(repository, data, new FixedRandom(faces));
         PropertyService propertyService = new PropertyService(data);
-        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService());
+        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService(new InMemoryTimerRepository()));
         return service.startGame(ROOM, List.of(1L, 2L));
     }
 
@@ -65,7 +64,7 @@ class AutoPlayServiceTest {
     void 주사위_대기면_주사위를_굴린다() {
         GameState state = start(1, 2);   // 주사위 1, 2 → 3번 칸(땅 103) 도착
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_ROLL);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPlayerState(1L).getPosition()).isEqualTo(3);
         assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
@@ -83,7 +82,7 @@ class AutoPlayServiceTest {
         state.getPlayerState(1L).setMoney(10_000);
         waitAt(state, 3, TurnPhase.AWAITING_SELL);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_SELL);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(101).orElseThrow().hasOwner()).isFalse();        // 싼 땅 둘을 판다
         assertThat(state.getPropertyState(105).orElseThrow().hasOwner()).isFalse();
@@ -98,20 +97,19 @@ class AutoPlayServiceTest {
         GameState state = start(2);   // 카드 목록의 2번째(돈 받기 200)
         waitAt(state, 2, TurnPhase.AWAITING_DRAW_CARD);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_DRAW_CARD);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(500_000 + 200);
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.CARD_DRAWN), any());
     }
 
     @Test
-    void 그_사이_상태가_바뀌었으면_대신_진행하지_않는다() {
-        GameState state = start();   // 아직 주사위 대기인데 구매 대기였다고 알려 온 경우
+    void 진행_중인_게임이_없으면_아무것도_보내지_않는다() {
+        start();
+        repository.deleteById(ROOM);   // 게임이 끝나 상태가 지워졌는데 마감시간이 남아 있던 경우
 
-        assertThatThrownBy(() -> autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE))
-                .isInstanceOf(GameException.class);
+        autoPlay.onTimeout(ROOM);
 
-        assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_ROLL);
         verifyNoInteractions(sender);
     }
 
@@ -128,7 +126,7 @@ class AutoPlayServiceTest {
         GameState state = start();
         waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);   // 독도(수익 비율 1.5), 땅값 20만
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
         assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
@@ -141,7 +139,7 @@ class AutoPlayServiceTest {
         state.getPlayerState(1L).setMoney(150_000);
         waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().hasOwner()).isFalse();
         assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
@@ -153,7 +151,7 @@ class AutoPlayServiceTest {
         own(state, 131, 1L, BuildingLevel.LAND);   // 서울 별장 15만: 통행료 +12.8만
         waitAt(state, 31, TurnPhase.AWAITING_BUILD);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(131).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
         assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(350_000);
@@ -165,7 +163,7 @@ class AutoPlayServiceTest {
         own(state, 104, 1L, BuildingLevel.LAND);   // 독도: 건설 불가
         waitAt(state, 4, TurnPhase.AWAITING_BUILD);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.LAND);
         assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
@@ -177,7 +175,7 @@ class AutoPlayServiceTest {
         own(state, 131, 1L, BuildingLevel.HOTEL);
         waitAt(state, 31, TurnPhase.AWAITING_BUILD);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_BUILD);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(131).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.HOTEL);
         assertThat(state.getCurrentPlayerId()).isEqualTo(2L);
@@ -190,7 +188,7 @@ class AutoPlayServiceTest {
         state.getPlayerState(1L).setMoney(1_000_000);
         waitAt(state, 4, TurnPhase.AWAITING_ACQUIRE);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_ACQUIRE);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
         assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(600_000);
@@ -206,7 +204,7 @@ class AutoPlayServiceTest {
         state.getPlayerState(1L).setMoney(10_000);
         waitAt(state, 3, TurnPhase.AWAITING_SELL);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_SELL);
+        autoPlay.onTimeout(ROOM);
 
         // 싼 땅부터 101, 106을 파는 게 아니라, 전략이 통행료 손실이 적은 서울 하나만 판다
         assertThat(state.getPropertyState(131).orElseThrow().hasOwner()).isFalse();
@@ -220,7 +218,7 @@ class AutoPlayServiceTest {
         GameState state = start();
         waitAt(state, 24, TurnPhase.AWAITING_DESTINATION);
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_DESTINATION);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPlayerState(1L).getPosition()).isEqualTo(4);   // 수익 비율이 가장 높은 빈 땅 독도
         assertThat(state.getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
@@ -232,7 +230,7 @@ class AutoPlayServiceTest {
         makeBot(state);
         waitAt(state, 4, TurnPhase.AWAITING_PURCHASE);   // 독도(수익 비율 1.5), 땅값 20만
 
-        autoPlay.onTimeout(ROOM, 1L, 1, TurnPhase.AWAITING_PURCHASE);
+        autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
         assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
@@ -243,11 +241,11 @@ class AutoPlayServiceTest {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         service = GameTestSupport.newGameService(repository, data, new Random(7));
         PropertyService propertyService = new PropertyService(data);
-        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService());
+        autoPlay = new AutoPlayService(service, repository, data, propertyService, new BasicBotStrategy(data, propertyService), sender, new TimerService(new InMemoryTimerRepository()));
         GameState state = service.startGame(ROOM, List.of(1L, 2L, 3L), Map.of(), Set.of(1L, 2L, 3L));
 
         for (int i = 0; i < 10_000 && !state.isGameOver(); i++) {
-            autoPlay.onTimeout(ROOM, state.getCurrentPlayerId(), state.getTurnNumber(), state.getPhase());
+            autoPlay.onTimeout(ROOM);
         }
 
         assertThat(state.isGameOver()).isTrue();

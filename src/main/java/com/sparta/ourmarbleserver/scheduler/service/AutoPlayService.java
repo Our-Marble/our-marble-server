@@ -15,6 +15,7 @@ import com.sparta.ourmarbleserver.property.service.PropertyService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 서버가 플레이어를 대신해 그 phase의 요청을 호출한다. 대상은 봇이거나, 제한 시간 안에 입력이 없어 AFK가 된 사람이다.
@@ -31,6 +32,7 @@ public class AutoPlayService implements TimerService.Handler {
     private final PropertyService propertyService;
     private final IBotStrategy strategy;
     private final WebSocketMessageSender sender;
+    private final TimerService timerService;
 
     public AutoPlayService(GameService gameService, GameStateRepository repository, GameDataService gameDataService,
                            PropertyService propertyService, IBotStrategy strategy, WebSocketMessageSender sender,
@@ -41,12 +43,23 @@ public class AutoPlayService implements TimerService.Handler {
         this.propertyService = propertyService;
         this.strategy = strategy;
         this.sender = sender;
+        this.timerService = timerService;
         timerService.setHandler(this);   // 시간이 지나면 이 서비스가 불리도록 타이머에 등록한다
     }
 
+    /**
+     * 마감시간이 지난 방의, 지금 저장된 상태의 현재 플레이어와 phase를 대신 진행한다.
+     * (타이머에는 누구의 어떤 phase인지 기록하지 않는다. 상태 저장과 마감시간 기록 사이에 서버가 죽어도 어긋나지 않게 하려는 것이다)
+     * 진행 중인 게임이 없으면 남은 타이머를 지운다.
+     */
     @Override
-    public void onTimeout(String roomId, long playerId, int turnNumber, TurnPhase phase) {
-        GameResult result = play(playerId, phase);
+    public void onTimeout(String roomId) {
+        Optional<GameState> state = repository.findById(roomId).filter(found -> !found.isGameOver());
+        if (state.isEmpty()) {
+            timerService.cancel(roomId);
+            return;
+        }
+        GameResult result = play(state.get().getCurrentPlayerId(), state.get().getPhase());
         for (GameMessage message : result.messages()) {
             sender.sendToRoom(result.roomId(), message.type(), message.payload());
         }
