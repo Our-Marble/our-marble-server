@@ -344,7 +344,7 @@ public class GameService {
         repository.save(state);
         restartTimer(state);
         if (justEnded) {
-            eventPublisher.publishEvent(new GameEndedEvent(state.getRoomId()));
+            eventPublisher.publishEvent(GameEndedEvent.of(state));
         }
     }
 

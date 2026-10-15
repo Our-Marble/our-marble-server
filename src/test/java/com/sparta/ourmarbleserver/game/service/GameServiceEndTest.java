@@ -69,12 +69,20 @@ class GameServiceEndTest {
         GameService service = newService(2, 1, 2);
         prepareBankruptcy();
 
-        service.rollDice( 1L);
+        service.rollDice(1L);
 
         assertThat(state().isGameOver()).isTrue();
-        assertThat(player(2L).getFinalRank()).isEqualTo(1);
-        assertThat(player(1L).getFinalRank()).isEqualTo(2);
-        assertThat(ended).containsExactly(new GameEndedEvent(ROOM));
+        assertThat(player(2L).getFinalRank()).isEqualTo(1);   // 생존자
+        assertThat(player(1L).getFinalRank()).isEqualTo(2);   // 파산자: 파산 시점의 생존자 수
+        assertThat(ended).hasSize(1);
+
+        GameEndedEvent event = (GameEndedEvent) ended.getFirst();
+        assertThat(event.roomId()).isEqualTo(ROOM);
+        assertThat(event.results()).hasSize(2).allMatch(result -> !result.bot());
+        assertThat(event.results()).extracting(GameEndedEvent.PlayerResult::finalRank)
+                .containsExactlyInAnyOrder(1, 2);
+        assertThat(event.results()).allSatisfy(result ->
+                assertThat(result.finalRank()).isEqualTo(player(result.playerId()).getFinalRank()));
     }
 
     @Test
@@ -114,7 +122,8 @@ class GameServiceEndTest {
         assertThat(state().isGameOver()).isTrue();
         assertThat(player(1L).getFinalRank()).isEqualTo(1);
         assertThat(player(2L).getFinalRank()).isEqualTo(2);
-        assertThat(ended).containsExactly(new GameEndedEvent(ROOM));
+        assertThat(ended).hasSize(1);
+        assertThat(((GameEndedEvent) ended.getFirst()).roomId()).isEqualTo(ROOM);
     }
 
     @Test
@@ -182,7 +191,8 @@ class GameServiceEndTest {
 
         service.rollDice(1L);
 
-        assertThat(ended).containsExactly(new GameEndedEvent(ROOM));
+        assertThat(ended).hasSize(1);
+        assertThat(((GameEndedEvent) ended.getFirst()).roomId()).isEqualTo(ROOM);
         assertThat(repository.findById(ROOM)).isEmpty();
         assertThatThrownBy(() -> service.rollDice(2L))
                 .isInstanceOfSatisfying(GameException.class,
