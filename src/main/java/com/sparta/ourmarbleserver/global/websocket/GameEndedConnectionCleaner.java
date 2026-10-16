@@ -36,12 +36,16 @@ public class GameEndedConnectionCleaner {
                     .filter(id -> !sessionRegistry.isConnected(id))
                     .toList();
 
-            if (disconnected.isEmpty()) {
-                return;
+            if (!disconnected.isEmpty()) {
+                log.info("[WS] 게임 종료 후 끊긴 멤버 정리: room={} players={}", roomId, disconnected);
+                if (!lobbyService.removeMembers(roomId, disconnected)) {
+                    return;   // 마지막 사람이 나가 방이 지워졌으면 보낼 대상이 없다
+                }
             }
 
-            log.info("[WS] 게임 종료 후 끊긴 멤버 정리: room={} players={}", roomId, disconnected);
-            if (lobbyService.removeMembers(roomId, disconnected)) {
+            // 대기(WAITING) 상태로 돌아간 방의 최신 정보(준비 해제 포함)를 남은 멤버 전원에게 알린다.
+            // 재접속으로 게임에 바로 들어온 클라는 방 스냅샷이 없어서, 이 ROOM_UPDATED를 받아야 대기방으로 돌아갈 수 있다.
+            if (!lobbyService.memberIdsOf(roomId).isEmpty()) {
                 sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
             }
         } catch (RuntimeException e) {
