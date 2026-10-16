@@ -29,16 +29,18 @@ public class ErrorCodeDocConfig {
     private static final Map<GameErrorCode, String> GAME = new EnumMap<>(GameErrorCode.class);
 
     static {
-        COMMON.put(CommonErrorCode.INVALID_MESSAGE, "JSON이 아니거나, type이 없거나 모르는 값이거나, 이 type을 처리하는 곳이 없음. 본문의 필드 형식이 틀리거나 방입장의 roomId가 비어 있음");
+        COMMON.put(CommonErrorCode.INVALID_MESSAGE, "JSON이 아니거나, type이 없거나 모르는 값이거나, 이 type을 처리하는 곳이 없음. 본문의 필드 형식이 틀리거나 대기실 입장(ENTER_ROOM)의 roomId가 비어 있음. 방 설정 변경(ROOM_CONFIG_REQUEST)에서 maxPlayers·botCount가 없거나 config 값이 범위를 벗어남");
 
-        LOBBY.put(LobbyErrorCode.INVALID_STATE, "방장이 준비·준비 취소를 보냄 (방장은 항상 준비 상태), 방 설정 변경 요청에 설정이 없음");
-        LOBBY.put(LobbyErrorCode.ROOM_NOT_FOUND, "없는 방에 입장");
-        LOBBY.put(LobbyErrorCode.ROOM_FULL, "가득 찬 방에 입장");
+        LOBBY.put(LobbyErrorCode.INVALID_STATE, "방장이 준비·준비 취소를 보냄 (방장은 항상 준비 상태), 대기실 설정 변경 요청에 설정이 없음");
+        LOBBY.put(LobbyErrorCode.ROOM_NOT_FOUND, "없는 방 번호로 입장·설정 변경");
+        LOBBY.put(LobbyErrorCode.ROOM_FULL, "가득 찬 대기실에 입장");
         LOBBY.put(LobbyErrorCode.ALREADY_IN_ROOM, "이미 방에 있는데 방만들기·방입장");
-        LOBBY.put(LobbyErrorCode.NOT_IN_ROOM, "방에 없는데 방나가기·준비·게임시작");
-        LOBBY.put(LobbyErrorCode.NOT_HOST, "방장이 아닌데 게임시작·방 설정 변경");
-        LOBBY.put(LobbyErrorCode.ROOM_ALREADY_STARTED, "시작한 방에 입장·나가기·준비·게임시작·방 설정 변경");
+        LOBBY.put(LobbyErrorCode.NOT_IN_ROOM, "어느 방에도 없는데 방나가기·준비·게임시작·설정 변경");
+        LOBBY.put(LobbyErrorCode.NOT_HOST, "방장이 아닌데 게임시작·대기실 설정 변경");
+        LOBBY.put(LobbyErrorCode.ROOM_ALREADY_STARTED, "시작한 방에 입장·나가기·준비·게임시작·설정 변경");
         LOBBY.put(LobbyErrorCode.NOT_ENOUGH_PLAYERS, "2명 미만으로 게임시작");
+        LOBBY.put(LobbyErrorCode.INVALID_MAX_PLAYERS, "방장이 보낸 최대 인원이 2~4가 아니거나 지금 방에 있는 사람 수보다 적음");
+        LOBBY.put(LobbyErrorCode.INVALID_BOT_COUNT, "방장이 보낸 봇 수가 음수이거나 사람과 봇을 합친 수가 최대 인원을 넘음");
         LOBBY.put(LobbyErrorCode.NOT_ALL_READY, "준비 안 한 사람이 있는데 게임시작");
 
         GAME.put(GameErrorCode.INVALID_STATE, "진행 중인 게임이 없거나, 현재 단계(phase)에서 받을 수 없는 요청");
