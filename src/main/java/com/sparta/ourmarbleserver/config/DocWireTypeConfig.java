@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.config;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import org.springdoc.core.customizers.OpenApiCustomizer;
@@ -22,6 +23,7 @@ import io.swagger.v3.oas.models.responses.ApiResponses;
  * payload record에는 type이 없고(MessageCodec이 보낼 때 붙임), 문서만 { "type": ..., payload 필드... } 모양으로 보여 준다.
  * 문서 주소 /docs/requests/create-room, /docs/notifications/room-updated 처럼 주소가 type 이름(소문자, 하이픈)과 같아야 한다.
  * MessageType에 없는 주소는 건드리지 않는다.
+ * 요청 페이지의 200 응답은 RESULT_TYPE에 적힌 결과 알림의 type도 보여 준다.
  */
 @Configuration
 public class DocWireTypeConfig {
@@ -29,6 +31,18 @@ public class DocWireTypeConfig {
     private static final String REQUESTS = "/docs/requests/";
     private static final String NOTIFICATIONS = "/docs/notifications/";
     private static final String JSON = "application/json";
+    /** 요청 type → 그 요청의 200 응답에 보여 줄 결과 알림 type. 한 가지 알림 스키마를 보여 주는 요청만 적는다. */
+    private static final Map<String, String> RESULT_TYPE = Map.ofEntries(
+            Map.entry("ROLL_DICE", "DICE_ROLLED"),
+            Map.entry("DRAW_CARD", "CARD_DRAWN"),
+            Map.entry("CHOOSE_DESTINATION", "DESTINATION_CHOSEN"),
+            Map.entry("PURCHASE_PROPERTY", "PROPERTY_PURCHASED"),
+            Map.entry("BUILD", "BUILT"),
+            Map.entry("ACQUIRE_PROPERTY", "PROPERTY_ACQUIRED"),
+            Map.entry("SELL_PROPERTIES", "PROPERTIES_SOLD"),
+            Map.entry("GAME_STATE_REQUEST", "GAME_STATE_SYNC"),
+            Map.entry("ROOM_LIST_REQUEST", "ROOM_LIST"),
+            Map.entry("START_GAME", "GAME_STARTED"));
 
     @Bean
     public OpenApiCustomizer wireTypeCustomizer() {
@@ -41,6 +55,10 @@ public class DocWireTypeConfig {
                     String type = typeOf(path, REQUESTS);
                     if (type != null) {
                         addToRequest(item.getPost(), type);
+                        String resultType = RESULT_TYPE.get(type);
+                        if (resultType != null) {
+                            addToResult(item.getPost(), resultType);
+                        }
                     }
                 } else if (path.startsWith(NOTIFICATIONS) && item.getGet() != null) {
                     String type = typeOf(path, NOTIFICATIONS);
@@ -70,6 +88,15 @@ public class DocWireTypeConfig {
             operation.setRequestBody(body);
         }
         body.setContent(withType(body.getContent(), type));
+    }
+
+    /** 요청 페이지의 200 응답 스키마에 결과 알림의 type을 더한다. 200 응답이 없으면 아무것도 하지 않는다. */
+    private static void addToResult(Operation operation, String resultType) {
+        ApiResponses responses = operation.getResponses();
+        ApiResponse ok = responses == null ? null : responses.get("200");
+        if (ok != null) {
+            ok.setContent(withType(ok.getContent(), resultType));
+        }
     }
 
     private static void addToResponse(Operation operation, String type) {
