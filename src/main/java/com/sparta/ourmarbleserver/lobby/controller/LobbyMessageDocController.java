@@ -52,14 +52,18 @@ public class LobbyMessageDocController {
     }
 
     @Operation(summary = "방입장성공", description = "요청 CREATE_ROOM, ENTER_ROOM → 알림 ROOM_ENTERED. 대기실을 만들거나 대기실에 들어가는 데 성공했다는 알림으로 요청자에게만 간다. 클라는 이 알림으로 대기실 화면으로 넘어간다. payload는 없고, 대기실 상태는 ROOM_UPDATED로 온다.")
-    @ApiResponse(responseCode = "200", description = "payload 없음")
+    @ApiResponse(responseCode = "200", description = "payload 없음",
+            content = @Content(mediaType = "application/json", schema = @Schema(type = "object"),
+                    examples = @ExampleObject(value = "{\"type\": \"ROOM_ENTERED\"}")))
     @GetMapping(value = "/room-entered", produces = "application/json")
     public String roomEntered() {
         return codec.encode(MessageType.ROOM_ENTERED, null);
     }
 
     @Operation(summary = "방나가기성공", description = "요청 LEAVE_ROOM → 알림 ROOM_LEFT. 대기실에서 나가는 데 성공했다는 알림으로 요청자에게만 간다. 이어서 최신 대기실 목록(ROOM_LIST)과 내 전적(PLAYER_RECORD)이 간다. payload는 없다.")
-    @ApiResponse(responseCode = "200", description = "payload 없음")
+    @ApiResponse(responseCode = "200", description = "payload 없음",
+            content = @Content(mediaType = "application/json", schema = @Schema(type = "object"),
+                    examples = @ExampleObject(value = "{\"type\": \"ROOM_LEFT\"}")))
     @GetMapping(value = "/room-left", produces = "application/json")
     public String roomLeft() {
         return codec.encode(MessageType.ROOM_LEFT, null);
