@@ -42,6 +42,7 @@ public enum MessageType {
     START_GAME,
     ROOM_LIST_REQUEST,
     ROOM_CONFIG_REQUEST,
+    CHAT_SEND,         // 로비 채팅 보내기
 
     // ===== 로비: 서버 -> 클라 알림 =====
     CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
@@ -50,5 +51,6 @@ public enum MessageType {
     ROOM_LIST,         // 본인에게: 방목록
     PLAYER_RECORD,     // 본인에게: 플레이어 전적 (ROOM_LIST와 항상 함께)
     ROOM_UPDATED,      // 방 전원: 인원·준비·방장 변경
-    GAME_STARTED       // 방 전원: 게임창 전환 신호
+    GAME_STARTED,      // 방 전원: 게임창 전환 신호
+    CHAT_BROADCAST     // 방 전원: 채팅 (보낸 본인 포함)
 }
