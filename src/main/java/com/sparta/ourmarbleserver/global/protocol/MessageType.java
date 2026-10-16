@@ -48,6 +48,7 @@ public enum MessageType {
     ROOM_ENTERED,      // 본인에게: 방 생성·입장 성공 (대기창 전환 신호)
     ROOM_LEFT,         // 본인에게: 방 나가기 성공
     ROOM_LIST,         // 본인에게: 방목록
+    PLAYER_RECORD,     // 본인에게: 플레이어 전적 (ROOM_LIST와 항상 함께)
     ROOM_UPDATED,      // 방 전원: 인원·준비·방장 변경
-    GAME_STARTED     // 방 전원: 게임창 전환 신호
+    GAME_STARTED       // 방 전원: 게임창 전환 신호
 }

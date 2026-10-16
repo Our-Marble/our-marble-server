@@ -22,6 +22,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
 
     private final LobbyService lobbyService;
     private final WebSocketMessageSender sender;
+    private final LobbyScreenSender lobbyScreenSender;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -45,7 +46,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
             case LEAVE_ROOM -> leaveRoom(playerId);
             case SET_READY -> setReady(playerId, objectMapper.treeToValue(payload, SetReadyRequestPayload.class));
             case START_GAME -> startGame(playerId);
-            case ROOM_LIST_REQUEST -> sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList()); // 방 목록은 자동으로 보내지 않는다. 로비 화면은 접속할 때와 새로고침(ROOM_LIST_REQUEST)할 때만 목록을 받는다.
+            case ROOM_LIST_REQUEST -> lobbyScreenSender.send(playerId); // 방 목록은 자동으로 보내지 않는다. 로비 화면은 접속할 때와 새로고침(ROOM_LIST_REQUEST)할 때만 목록을 받는다.
             case ROOM_CONFIG_REQUEST -> setRoomConfig(playerId, objectMapper.treeToValue(payload, RoomConfigRequestPayload.class));
             default -> throw new IllegalStateException("LobbyMessageHandler가 처리하지 않는 type: " + type);
         }
@@ -75,7 +76,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
         boolean roomRemains = lobbyService.leave(roomId, playerId);
 
         sender.sendToPlayer(playerId, MessageType.ROOM_LEFT, null);
-        sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList());   // 로비로 돌아가니 최신 목록을 같이 준다
+        lobbyScreenSender.send(playerId);   // 로비로 돌아가니 최신 목록과 전적을 같이 준다
         if (roomRemains) {   // 마지막 사람이 나가 방이 지워졌으면 보낼 대상이 없다
             sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
         }
