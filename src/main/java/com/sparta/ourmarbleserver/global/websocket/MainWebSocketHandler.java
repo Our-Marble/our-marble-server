@@ -4,6 +4,7 @@ import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.*;
 import com.sparta.ourmarbleserver.global.transport.InboundMessage;
+import com.sparta.ourmarbleserver.global.transport.LobbyScreenSender;
 import com.sparta.ourmarbleserver.global.transport.MessageCodec;
 import com.sparta.ourmarbleserver.global.transport.MessageRouter;
 import com.sparta.ourmarbleserver.lobby.dto.GameStartedPayload;
@@ -39,6 +40,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
     private final SessionRegistry sessionRegistry;
     private final MessageRouter router;
     private final WebSocketMessageSender sender;
+    private final LobbyScreenSender lobbyScreenSender;
     private final PlayerService playerService;
     private final LobbyService lobbyService;
 
@@ -66,10 +68,10 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         lobbyService.leaveWaitingRoom(playerId)
                 .ifPresent(roomId -> sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId)));
 
-        // 게임 중인 방에 있으면 게임 화면으로, 아니면 로비 목록
+        // 게임 중인 방에 있으면 게임 화면으로, 아니면 로비 목록(방 목록 + 전적)
         lobbyService.playingRoomIdOf(playerId).ifPresentOrElse(
                 roomId -> sender.sendToPlayer(playerId, MessageType.GAME_STARTED, new GameStartedPayload(roomId)),
-                () -> sender.sendToPlayer(playerId, MessageType.ROOM_LIST, lobbyService.roomList()));
+                () -> lobbyScreenSender.send(playerId));
     }
 
     @Override

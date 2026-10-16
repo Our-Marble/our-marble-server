@@ -21,18 +21,18 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
 
 class LobbyMessageHandlerTest {
 
     private final LobbyService lobbyService = mock(LobbyService.class);
     private final WebSocketMessageSender sender = mock(WebSocketMessageSender.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final LobbyMessageHandler handler = new LobbyMessageHandler(lobbyService, sender, objectMapper);
-
+    private final LobbyScreenSender lobbyScreenSender = mock(LobbyScreenSender.class);
+    private final LobbyMessageHandler handler = new LobbyMessageHandler(lobbyService, sender, lobbyScreenSender, objectMapper);
     private final RoomUpdatedPayload updated = new RoomUpdatedPayload(null);
     private final RoomListPayload list = new RoomListPayload(List.of());
 
@@ -54,18 +54,24 @@ class LobbyMessageHandlerTest {
     }
 
     @Test
-    void 나가면_본인에게_ROOM_LEFT와_최신_목록을_보내고_방이_없으면_방_전원에게는_보내지_않는다() {
+    void 나가면_본인에게_ROOM_LEFT와_로비_화면을_보내고_방이_없으면_방_전원에게는_보내지_않는다() {
         when(lobbyService.roomIdOf(1L)).thenReturn("r_1");
         when(lobbyService.leave("r_1", 1L)).thenReturn(false);
-        when(lobbyService.roomList()).thenReturn(list);
 
         handler.handle(MessageType.LEAVE_ROOM, 1L, objectMapper.createObjectNode());
 
-        InOrder order = inOrder(sender);
+        InOrder order = inOrder(sender, lobbyScreenSender);
         order.verify(sender).sendToPlayer(1L, MessageType.ROOM_LEFT, null);
-        order.verify(sender).sendToPlayer(1L, MessageType.ROOM_LIST, list);
+        order.verify(lobbyScreenSender).send(1L);
         verify(sender, never()).sendToRoom(anyString(), any(), any());
         verify(sender, never()).sendToLobby(any(), any());
+    }
+
+    @Test
+    void 새로고침하면_로비_화면을_보낸다() {
+        handler.handle(MessageType.ROOM_LIST_REQUEST, 1L, objectMapper.createObjectNode());
+
+        verify(lobbyScreenSender).send(1L);
     }
 
     @Test
