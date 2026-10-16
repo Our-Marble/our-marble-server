@@ -42,6 +42,7 @@ public class DocOrderConfig {
             "/docs/requests/start-game",
             "/docs/requests/room-list-request",
             "/docs/requests/room-config-request",
+            "/docs/requests/chat-send",
             "/docs/notifications/connected",
             "/docs/notifications/room-entered",
             "/docs/notifications/room-left",
@@ -49,6 +50,7 @@ public class DocOrderConfig {
             "/docs/notifications/player-record",
             "/docs/notifications/room-updated",
             "/docs/notifications/game-started",
+            "/docs/notifications/chat-broadcast",
             "/docs/notifications/common-error",
             "/docs/notifications/lobby-error",
             "/docs/notifications/game-error");
