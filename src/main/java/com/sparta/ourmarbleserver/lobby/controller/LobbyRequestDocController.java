@@ -38,8 +38,8 @@ public class LobbyRequestDocController {
     public void enterRoom(@RequestBody EnterRoomRequestPayload body) {
     }
 
-    @Operation(summary = "방나가기", description = "type: LEAVE_ROOM. 방에서 나간다. 요청 본문은 없다. 방장이 나가면 가장 먼저 참가한 사람이 방장이 되고, 마지막 사람이 나가면 방이 삭제된다. 결과는 요청자에게 ROOM_LEFT, 남은 방 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
-            + "오류: NOT_IN_ROOM (어느 방에도 없음) → ROOM_ALREADY_STARTED (시작한 방)")
+    @Operation(summary = "방나가기", description = "type: LEAVE_ROOM. 대기실에서 나간다. 요청 본문은 없다. 방장이 나가면 가장 먼저 참가한 사람(봇 제외)이 방장이 되고, 사람이 한 명도 안 남으면(봇만 남아도) 대기실이 삭제된다. 결과는 요청자에게 ROOM_LEFT와 최신 대기실 목록(ROOM_LIST), 남은 대기실 전원에게 ROOM_UPDATED 알림으로 간다. 대기실이 삭제되면 ROOM_UPDATED는 가지 않는다.\n\n"
+            + "오류: NOT_IN_ROOM (어느 대기실에도 없음) → ROOM_ALREADY_STARTED (시작한 방)")
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/leave-room")
     public void leaveRoom() {
