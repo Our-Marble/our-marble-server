@@ -46,6 +46,7 @@ public class DocOrderConfig {
             "/docs/notifications/room-entered",
             "/docs/notifications/room-left",
             "/docs/notifications/room-list",
+            "/docs/notifications/player-record",
             "/docs/notifications/room-updated",
             "/docs/notifications/game-started",
             "/docs/notifications/common-error",
