@@ -9,6 +9,9 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorPayload;
 import com.sparta.ourmarbleserver.global.protocol.GameErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 
+import com.sparta.ourmarbleserver.global.protocol.MessageType;
+import com.sparta.ourmarbleserver.global.transport.MessageCodec;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -26,15 +29,21 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequestMapping("/docs/notifications")
 public class ErrorMessageDocController {
 
+    private final MessageCodec codec;
+
+    public ErrorMessageDocController(MessageCodec codec) {
+        this.codec = codec;
+    }
+
     @Operation(summary = "공통오류", description = """
             type: COMMON_ERROR. 로비 요청인지 게임 요청인지 구분할 수 없는 요청이 거절되면 서버가 요청한 사람에게만 보낸다. 오류가 나도 서버 상태는 바뀌지 않는다. 클라는 `type`으로 화면을 고르고 `code`로 세부 분기하며, `message`는 사람이 읽는 기본 문구다. [예시 JSON 열기](/docs/notifications/common-error)
             """)
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
-                    examples = @ExampleObject(value = "{\"code\": \"INVALID_MESSAGE\", \"message\": \"메시지 형식이 올바르지 않습니다.\"}")))
-    @GetMapping("/common-error")
-    public ErrorPayload commonError() {
-        return ErrorPayload.of(CommonErrorCode.INVALID_MESSAGE);
+                    examples = @ExampleObject(value = "{\"type\": \"COMMON_ERROR\", \"code\": \"INVALID_MESSAGE\", \"message\": \"메시지 형식이 올바르지 않습니다.\"}")))
+    @GetMapping(value = "/common-error", produces = "application/json")
+    public String commonError() {
+        return codec.encode(MessageType.COMMON_ERROR, ErrorPayload.of(CommonErrorCode.INVALID_MESSAGE));
     }
 
     @Operation(summary = "로비오류", description = """
@@ -42,10 +51,10 @@ public class ErrorMessageDocController {
             """)
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
-                    examples = @ExampleObject(value = "{\"code\": \"ROOM_FULL\", \"message\": \"방이 가득 찼습니다.\"}")))
-    @GetMapping("/lobby-error")
-    public ErrorPayload lobbyError() {
-        return ErrorPayload.of(LobbyErrorCode.ROOM_FULL);
+                    examples = @ExampleObject(value = "{\"type\": \"LOBBY_ERROR\", \"code\": \"ROOM_FULL\", \"message\": \"방이 가득 찼습니다.\"}")))
+    @GetMapping(value = "/lobby-error", produces = "application/json")
+    public String lobbyError() {
+        return codec.encode(MessageType.LOBBY_ERROR, ErrorPayload.of(LobbyErrorCode.ROOM_FULL));
     }
 
     @Operation(summary = "게임오류", description = """
@@ -53,9 +62,9 @@ public class ErrorMessageDocController {
             """)
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
-                    examples = @ExampleObject(value = "{\"code\": \"NOT_YOUR_TURN\", \"message\": \"내 차례가 아닙니다.\"}")))
-    @GetMapping("/game-error")
-    public ErrorPayload gameError() {
-        return ErrorPayload.of(GameErrorCode.NOT_YOUR_TURN);
+                    examples = @ExampleObject(value = "{\"type\": \"GAME_ERROR\", \"code\": \"NOT_YOUR_TURN\", \"message\": \"내 차례가 아닙니다.\"}")))
+    @GetMapping(value = "/game-error", produces = "application/json")
+    public String gameError() {
+        return codec.encode(MessageType.GAME_ERROR, ErrorPayload.of(GameErrorCode.NOT_YOUR_TURN));
     }
 }
