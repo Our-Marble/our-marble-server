@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sparta.ourmarbleserver.lobby.dto.ChatBroadcastPayload;
 import com.sparta.ourmarbleserver.lobby.dto.GameStartedPayload;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.dto.RoomUpdatedPayload;
@@ -113,5 +114,14 @@ public class LobbyMessageDocController {
     @GetMapping(value = "/game-started", produces = "application/json")
     public String gameStarted() {
         return codec.encode(MessageType.GAME_STARTED, new GameStartedPayload("r_3"));
+    }
+
+    @Operation(summary = "채팅", description = "요청 CHAT_SEND → 알림 CHAT_BROADCAST. 방에서 채팅이 왔다. 보낸 본인을 포함한 방 전원에게 간다. playerId는 보낸 사람의 번호다. 시각 필드는 없고 클라가 받은 시각을 쓴다. 나중에 입장한 사람에게 지난 채팅은 보내지 않는다 [예시 JSON 열기](/docs/notifications/chat-broadcast)")
+    @ApiResponse(responseCode = "200", description = "payload",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ChatBroadcastPayload.class),
+                    examples = @ExampleObject(value = "{\"playerId\": 1, \"content\": \"하이\"}")))
+    @GetMapping("/chat-broadcast")
+    public ChatBroadcastPayload chatBroadcast() {
+        return new ChatBroadcastPayload(1L, "하이");
     }
 }

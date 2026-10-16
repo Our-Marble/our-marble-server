@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sparta.ourmarbleserver.lobby.dto.ChatSendRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.RoomConfigRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.SetReadyRequestPayload;
@@ -71,5 +72,12 @@ public class LobbyRequestDocController {
     @ApiResponse(responseCode = "200", description = NO_RESPONSE)
     @PostMapping("/room-config-request")
     public void roomConfigRequest(@RequestBody RoomConfigRequestPayload body) {
+    }
+
+    @Operation(summary = "채팅보내기", description = "type: CHAT_SEND. 내가 들어 있는 방에 채팅을 보낸다. 방 번호는 서버가 보낸 사람의 위치로 안다. 결과는 보낸 본인을 포함한 방 전원에게 CHAT_BROADCAST 알림으로 간다. content가 빈 문자열이거나 공백뿐이면 아무 일도 일어나지 않는다. 글자 수 제한과 도배 방지는 서버에서 하지 않는다.\n\n"
+            + "오류: COMMON_ERROR(INVALID_MESSAGE) (content가 없거나 문자열이 아님) → NOT_IN_ROOM (어느 방에도 없음) → INVALID_STATE (게임이 시작된 방)")
+    @ApiResponse(responseCode = "200", description = NO_RESPONSE)
+    @PostMapping("/chat-send")
+    public void chatSend(@RequestBody ChatSendRequestPayload body) {
     }
 }
