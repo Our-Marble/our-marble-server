@@ -68,10 +68,10 @@ public class GameRequestDocController {
     @PostMapping("/purchase-property")
     public void purchaseProperty(@RequestBody PurchasePropertyRequestPayload body) {
     }
-    
-    @Operation(summary = "게임상태요청", description = "type: GAME_STATE_REQUEST. 재접속했을 때 현재 게임 상태를 요청한다. 요청 본문은 없다. 결과는 GAME_STATE_SYNC 알림으로 요청자에게만 간다.\n\n"
-            + "진행 중인 게임이 없으면(로비에 있는 사람 등) 아무 응답도 가지 않는다.")
-    @ApiResponse(responseCode = "200", description = "응답 없음. 성공하면 GAME_STATE_SYNC가 요청자에게만 간다.")
+
+    @Operation(summary = "게임상태요청", description = "type: GAME_STATE_REQUEST. 재접속했을 때 현재 게임 상태를 요청한다. 요청 본문은 없다. 결과는 GAME_STATE_SYNC 알림으로 요청자에게만 간다. 재접속한 사람의 AFK 상태(자동 진행)는 이때 풀린다.\n\n"
+            + "진행 중인 게임이 없으면(대기실에 있는 사람 등) payload가 없는 GAME_STATE_SYNC가 간다.")
+    @ApiResponse(responseCode = "200", description = "응답 없음. GAME_STATE_SYNC가 요청자에게만 간다. 진행 중인 게임이 없으면 payload가 없다.")
     @PostMapping("/game-state-request")
     public void gameStateRequest() {
     }
