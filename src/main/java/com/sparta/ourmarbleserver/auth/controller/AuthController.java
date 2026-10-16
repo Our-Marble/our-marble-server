@@ -10,6 +10,7 @@ import com.sparta.ourmarbleserver.auth.service.EmailVerificationService;
 import com.sparta.ourmarbleserver.auth.service.JwtAuthService;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.auth.service.SignupService;
+import com.sparta.ourmarbleserver.global.exception.AuthExceptionHandler.AuthExceptionResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -40,7 +43,8 @@ public class AuthController {
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 가입한다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "201", description = "가입 성공. 만들어진 회원 정보를 돌려준다.")
-    @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나, 비어 있는 값이 있거나, 닉네임이 20자를 넘음")
+    @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나, 비어 있는 값이 있거나, 닉네임이 20자를 넘거나, 이메일 인증을 하지 않음",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @PostMapping("/signup")
     public ResponseEntity<PlayerResponse> signup(
             @Valid @RequestBody SignupRequest body
@@ -56,9 +60,12 @@ public class AuthController {
 
     @Operation(summary = "이메일 인증번호 발송", description = "입력한 이메일로 6자리 인증번호를 발송한다. 인증번호는 5분 동안 유효하다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "204", description = "인증번호 발송 성공 (본문 없음)")
-    @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나 이메일이 비어 있음")
-    @ApiResponse(responseCode = "409", description = "이미 가입된 이메일")
-    @ApiResponse(responseCode = "502", description = "메일 서버를 통한 발송 실패")
+    @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나 이메일이 비어 있음",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+    @ApiResponse(responseCode = "409", description = "이미 가입된 이메일",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+    @ApiResponse(responseCode = "502", description = "메일 서버를 통한 발송 실패",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @PostMapping("/email/send")
     public ResponseEntity<Void> emailSend(
             @Valid @RequestBody EmailSendRequest request
@@ -69,7 +76,8 @@ public class AuthController {
 
     @Operation(summary = "이메일 인증번호 확인", description = "이메일로 받은 6자리 인증번호를 확인한다. 성공하면 해당 이메일은 30분 동안 회원가입할 수 있다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "204", description = "이메일 인증 성공 (본문 없음)")
-    @ApiResponse(responseCode = "400", description = "인증번호가 틀렸거나, 없거나, 만료됨")
+    @ApiResponse(responseCode = "400", description = "인증번호가 틀렸거나, 없거나, 만료됐거나, 6자리 숫자가 아님",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @PostMapping("/email/verify")
     public ResponseEntity<Void> emailVerify(
             @Valid @RequestBody EmailVerifyRequest request
@@ -80,7 +88,8 @@ public class AuthController {
 
     @Operation(summary = "로그인", description = "이메일과 비밀번호가 맞으면 accessToken(JWT)을 돌려준다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "200", description = "로그인 성공")
-    @ApiResponse(responseCode = "401", description = "없는 이메일이거나 비밀번호가 틀림")
+    @ApiResponse(responseCode = "401", description = "없는 이메일이거나 비밀번호가 틀림",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @PostMapping("/login")
     public ResponseEntity<AccessTokenResponse> login(
             @RequestBody LoginRequest request
@@ -92,7 +101,7 @@ public class AuthController {
     @Operation(summary = "로그아웃", description = "서버는 아무것도 하지 않고 204만 돌려준다. 토큰은 서버에 저장되지 않으므로, 클라이언트가 저장한 토큰을 지우면 로그아웃이다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponse(responseCode = "204", description = "성공 (본문 없음)")
-    @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨")
+    @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
         return ResponseEntity.noContent().build();
