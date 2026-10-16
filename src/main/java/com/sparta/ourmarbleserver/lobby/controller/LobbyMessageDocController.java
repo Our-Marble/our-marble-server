@@ -52,7 +52,12 @@ public class LobbyMessageDocController {
     public void roomLeft() {
     }
 
-    @Operation(summary = "방목록", description = "요청 ROOM_LIST_REQUEST → 알림 ROOM_LIST. 대기 중인 방 목록으로, 요청자에게만 간다. 방이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)")
+    @Operation(summary = "방목록", description = "요청 ROOM_LIST_REQUEST → 알림 ROOM_LIST. 대기실 목록으로, 요청자에게만 간다. 대기실이 없으면 rooms는 빈 배열이다 [예시 JSON 열기](/docs/notifications/room-list)\n\n"
+            + "**ROOM_LIST가 가는 때**\n\n"
+            + "- 접속 직후: CONNECTED 다음에 간다. 게임 중인 방이 있으면 ROOM_LIST 대신 GAME_STARTED가 간다.\n"
+            + "- 대기실 목록 요청(ROOM_LIST_REQUEST)을 보냈을 때\n"
+            + "- 대기실에서 나간 직후(LEAVE_ROOM): ROOM_LEFT와 함께 간다.\n\n"
+            + "목록이 바뀌어도 서버가 자동으로 보내지 않으니, 최신 목록은 ROOM_LIST_REQUEST로 받는다.")
     @ApiResponse(responseCode = "200", description = "payload",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = RoomListPayload.class),
                     examples = @ExampleObject(value = "{\"rooms\": [{\"roomId\": \"r_3\", \"hostNickname\": \"철수\", \"mapId\": 1, \"playerCount\": 2}]}")))
