@@ -5,6 +5,7 @@ import com.sparta.ourmarbleserver.auth.dto.PlayRecordResponse;
 import com.sparta.ourmarbleserver.auth.dto.PlayRecordUpdateRequest;
 import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
+import com.sparta.ourmarbleserver.global.exception.AuthExceptionHandler.AuthExceptionResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,7 +50,8 @@ public class PlayerController {
 
     @Operation(summary = "내 전적 기록", description = "한 판을 마친 결과를 기록한다. 플레이한 판 수가 1 늘고, won이 true이면 이긴 판 수도 1 는다.")
     @ApiResponse(responseCode = "200", description = "성공. 갱신된 전적을 돌려준다.")
-    @ApiResponse(responseCode = "400", description = "won 값이 없음")
+    @ApiResponse(responseCode = "400", description = "won 값이 없음",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
     @PatchMapping("/me/play-record")
     public ResponseEntity<PlayRecordResponse> updatePlayRecord(
