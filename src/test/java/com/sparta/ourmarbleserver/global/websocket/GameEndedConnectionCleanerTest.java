@@ -37,14 +37,16 @@ class GameEndedConnectionCleanerTest {
     }
 
     @Test
-    void 사람이_모두_접속해_있으면_봇이_있어도_아무것도_하지_않는다() {
+    void 사람이_모두_접속해_있으면_아무도_내보내지_않고_대기방_정보만_알린다() {
         when(lobbyService.memberIdsOf("r_1")).thenReturn(List.of(1L, -1L, -2L));
         when(sessionRegistry.isConnected(1L)).thenReturn(true);
+        when(lobbyService.roomUpdated("r_1")).thenReturn(updated);
 
         cleaner.onGameEnded(new GameEndedEvent("r_1"));
 
         verify(lobbyService, never()).removeMembers(anyString(), anyCollection());
-        verify(sender, never()).sendToRoom(anyString(), any(), any());
+        // 재접속한 클라도 대기방으로 돌아갈 수 있게, 게임이 끝나면 항상 ROOM_UPDATED를 보낸다
+        verify(sender).sendToRoom("r_1", MessageType.ROOM_UPDATED, updated);
     }
 
     @Test
