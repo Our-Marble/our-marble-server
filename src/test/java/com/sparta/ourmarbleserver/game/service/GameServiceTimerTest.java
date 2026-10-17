@@ -39,7 +39,7 @@ class GameServiceTimerTest {
     }
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
-    private final TimerService timer = new TimerService(new InMemoryTimerRepository());
+    private final TimerService timer = new TimerService(new InMemoryTimerRepository(repository));   // 상태도 같은 저장소에 저장한다
     private final BlockingQueue<Timeout> timeouts = new LinkedBlockingQueue<>();
 
     @AfterEach

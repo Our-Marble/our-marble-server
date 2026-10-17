@@ -14,7 +14,9 @@ import java.util.stream.Collectors;
  * - game:state:{roomId}  게임 상태 JSON (StoredGame)
  * - game:player-room     playerId → roomId (Hash, 진행 중이고 파산하지 않은 플레이어만)
  * findById / findByPlayerId는 매번 새 GameState를 돌려주므로, 상태를 바꾼 뒤에는 반드시 save를 불러야 한다.
- * 여러 명령을 차례로 보내므로 원자적이지 않다. (서버 사이 동시 수정은 분산 락 단계에서 막는다)
+ * save는 여러 명령을 차례로 보내므로 원자적이지 않다.
+ * 게임 진행 중의 저장은 GameService가 TimerService를 거쳐 하고, RedisTimerRepository가 prepareSave의 결과를
+ * 타이머 갱신과 함께 Lua 스크립트 하나로 쓴다. (상태 저장과 마감시간 기록이 한 번에 반영된다)
  */
 @Component
 @RequiredArgsConstructor
@@ -42,6 +44,29 @@ public class RedisGameStateRepository implements GameStateRepository {
                 .filter(state -> !state.isGameOver())
                 .filter(state -> state.players().stream()
                         .anyMatch(p -> p.getPlayerId() == playerId && !p.isBankrupt()));
+    }
+
+    /**
+     * 상태 하나를 저장할 때 쓸 내용. 다른 저장(타이머)과 한 Lua 스크립트에서 쓰려고 미리 계산해 둔다.
+     * @param stateKey          game:state:{roomId}
+     * @param playerRoomKey     game:player-room
+     * @param json              저장할 상태 JSON
+     * @param removedPlayerIds  색인에서 빠질 플레이어 (파산, 게임 종료). 색인 값이 이 방일 때만 지운다.
+     * @param activePlayerIds   색인에 이 방으로 적을 플레이어
+     */
+    public record PreparedSave(String stateKey, String playerRoomKey, String json,
+                               List<String> removedPlayerIds, List<String> activePlayerIds) {
+    }
+
+    /** save와 같은 내용을 미리 계산한다. (덮어쓰기 전 상태를 읽어서 색인에서 빠질 사람을 정한다) */
+    public PreparedSave prepareSave(GameState state) {
+        String roomId = state.getRoomId();
+        StoredGame stored = StoredGame.from(state);
+        Set<Long> before = activePlayerIds(findStored(roomId).orElse(null));   // 덮어쓰기 전 색인 대상
+        Set<Long> after = activePlayerIds(stored);
+        List<String> removed = before.stream().filter(id -> !after.contains(id)).map(String::valueOf).toList();
+        return new PreparedSave(stateKey(roomId), PLAYER_ROOM_KEY, objectMapper.writeValueAsString(stored),
+                removed, after.stream().map(String::valueOf).toList());
     }
 
     @Override

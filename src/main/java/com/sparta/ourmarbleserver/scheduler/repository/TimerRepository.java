@@ -1,5 +1,7 @@
 package com.sparta.ourmarbleserver.scheduler.repository;
 
+import com.sparta.ourmarbleserver.game.state.GameState;
+
 import java.util.List;
 
 /**
@@ -52,6 +54,15 @@ public interface TimerRepository {
      * token이 있는데 그 사이 다른 쪽이 리스를 가져갔으면 아무것도 하지 않고 false.
      */
     boolean schedule(String roomId, long delayMillis, String token);
+
+    /**
+     * 게임 상태 저장 + 리스 해제 + 새 마감시간('지금 + delayMillis') 기록을 한 번에 한다. (요청 처리를 마칠 때)
+     * delayMillis가 음수면 마감시간 대신 그 방의 타이머(마감시간, 리스, AFK)를 지운다. (게임 종료)
+     * token이 null이면 리스와 상관없이 기록한다. (게임 시작)
+     * token이 있는데 그 사이 다른 쪽이 리스를 가져갔으면 상태도 타이머도 쓰지 않고 false.
+     * (처리가 리스 시간보다 오래 걸려 다른 서버가 대신 진행을 시작한 경우, 그쪽의 결과를 덮어쓰지 않는다)
+     */
+    boolean saveAndSchedule(GameState state, long delayMillis, String token);
 
     /** 요청이 실패했을 때 잡았던 리스를 풀고 마감시간을 previousDeadline으로 되돌린다. 리스 주인이 바뀌었으면 아무것도 하지 않는다. */
     void restore(String roomId, String token, long previousDeadline);
