@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.global.websocket;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
@@ -145,5 +146,18 @@ class SessionRegistryTest {
         registry.register(1L, a);
 
         assertThatCode(() -> registry.remove(1L, a)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void 서버가_내려갈_때_이_서버의_연결을_모두_닫는다() throws Exception {
+        WebSocketSession a = openSession("a");
+        WebSocketSession b = openSession("b");
+        registry.register(1L, a);
+        registry.register(2L, b);
+
+        registry.closeAll();
+
+        verify(a).close(CloseStatus.SERVICE_RESTARTED);
+        verify(b).close(CloseStatus.SERVICE_RESTARTED);
     }
 }
