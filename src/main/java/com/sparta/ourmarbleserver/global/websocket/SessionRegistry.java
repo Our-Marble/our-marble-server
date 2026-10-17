@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
@@ -125,5 +126,17 @@ public class SessionRegistry {
     // "서버id:세션id". 감싼 세션(Decorator)과 원래 세션의 getId()는 같다.
     private String tokenOf(WebSocketSession session) {
         return server.id() + ":" + session.getId();
+    }
+
+    // 이 서버의 연결을 모두 닫는다. 정상 종료 시 WebSocketShutdown이 Tomcat보다 먼저 부른다.
+    // 닫히면서 afterConnectionClosed가 접속 기록 삭제와 대기방 정리를 마칠 수 있다. (클라는 1012를 받으면 재접속)
+    public void closeAll() {
+        sessions.forEach((playerId, session) -> {
+            try {
+                session.close(CloseStatus.SERVICE_RESTARTED);
+            } catch (IOException | RuntimeException e) {
+                log.warn("[WS] 종료 중 연결 닫기 실패: player={} {}", playerId, e.getMessage());
+            }
+        });
     }
 }

@@ -11,6 +11,7 @@ import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
 import com.sparta.ourmarbleserver.lobby.service.ChatService;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
+import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomLock;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,7 @@ class ChatDeliveryTest {
     private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final SessionRegistry sessionRegistry = mock(SessionRegistry.class);
     private final LobbyService lobbyService =
-            new LobbyService(repository, mock(GameService.class), new FakePlayerService(), mock(BotService.class));
+            new LobbyService(repository, mock(GameService.class), new FakePlayerService(), mock(BotService.class), new InMemoryRoomLock());
     private final MessageRouter router = new MessageRouter(java.util.List.of(
             new ChatMessageHandler(new ChatService(lobbyService), newSender(), objectMapper)));
 

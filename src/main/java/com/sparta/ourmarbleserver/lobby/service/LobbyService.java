@@ -9,8 +9,10 @@ import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.*;
 import com.sparta.ourmarbleserver.lobby.state.Room;
+import com.sparta.ourmarbleserver.lobby.state.RoomLock;
 import com.sparta.ourmarbleserver.lobby.state.RoomRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
@@ -21,11 +23,13 @@ import java.util.*;
  * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(LobbyMessageHandler)이 이 클래스의 메서드만 호출한다.
  * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
  * 규칙에 어긋난 요청은 GameException(LobbyErrorCode.*)을 던지고, 전송 계층이 LOBBY_ERROR로 바꿔 보낸다.
- * 방 하나를 여러 요청이 동시에 바꿀 수 있어서 모든 메서드를 synchronized로 직렬 처리한다.
+ * 한 서버 안의 동시 요청은 synchronized로, 서버 사이의 동시 수정은 방 락(RoomLock)으로 막는다.
+ * 방을 바꾸는 메서드는 그 방의 락 안에서 "읽고 → 검증 → 저장"한다.
  * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 방을 대기(WAITING) 상태로 되돌린다.
  * 멤버는 그대로 두고 방장이 아닌 사람의 준비는 푼다.
  * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LobbyService {
@@ -34,6 +38,7 @@ public class LobbyService {
     private final GameService gameService;
     private final PlayerService playerService;
     private final BotService botService;
+    private final RoomLock roomLock;
 
     // ==== 방 만들기 / 조회 ====
 
@@ -126,19 +131,21 @@ public class LobbyService {
      * → 이미 어떤 방에 있음(시작한 방 포함) ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
      */
     public synchronized RoomInfo join(String roomId, long playerId) {
-        Room room = findRoom(roomId);
-        if (room.getStatus() != RoomStatus.WAITING) {
-            throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
-        }
-        requireNotInAnyRoom(playerId);
-        if (room.isFull()) {
-            throw new GameException(LobbyErrorCode.ROOM_FULL);
-        }
+        return roomLock.call(roomId, () -> {
+            Room room = findRoom(roomId);
+            if (room.getStatus() != RoomStatus.WAITING) {
+                throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
+            }
+            requireNotInAnyRoom(playerId);
+            if (room.isFull()) {
+                throw new GameException(LobbyErrorCode.ROOM_FULL);
+            }
 
-        room.addMember(playerId, false);
-        room.setNickname(playerId, nicknameOf(playerId));
-        repository.save(room);
-        return toInfo(room);
+            room.addMember(playerId, false);
+            room.setNickname(playerId, nicknameOf(playerId));
+            repository.save(room);
+            return toInfo(room);
+        });
     }
 
     /**
@@ -147,6 +154,11 @@ public class LobbyService {
      * 방이 남아 있으면 true, 마지막 사람이 나가 방이 삭제됐으면 false.
      */
     public synchronized boolean leave(String roomId, long playerId) {
+        return roomLock.call(roomId, () -> leaveInLock(roomId, playerId));
+    }
+
+    /** 나가기 본체. 반드시 그 방의 락 안에서 부른다. (락 안에서 leave를 부르면 자기 락을 기다리게 된다) */
+    public synchronized boolean leaveInLock(String roomId, long playerId) {
         Room room = findRoom(roomId);
         if (!room.hasMember(playerId)) {
             throw new GameException(LobbyErrorCode.NOT_IN_ROOM);
@@ -198,30 +210,32 @@ public class LobbyService {
      * 실패하면 방은 그대로다.
      */
     public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers, int botCount) {
-        Room room = findRoom(roomId);
-        if (room.getStatus() != RoomStatus.WAITING) {
-            throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
-        }
-        if (room.getHostId() != playerId) {
-            throw new GameException(LobbyErrorCode.NOT_HOST);
-        }
-        if (config == null) {
-            throw new GameException(LobbyErrorCode.INVALID_STATE);
-        }
+        return roomLock.call(roomId, () -> {
+            Room room = findRoom(roomId);
+            if (room.getStatus() != RoomStatus.WAITING) {
+                throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
+            }
+            if (room.getHostId() != playerId) {
+                throw new GameException(LobbyErrorCode.NOT_HOST);
+            }
+            if (config == null) {
+                throw new GameException(LobbyErrorCode.INVALID_STATE);
+            }
 
-        int humans = humanCount(room);
-        if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS || maxPlayers < humans) {
-            throw new GameException(LobbyErrorCode.INVALID_MAX_PLAYERS);
-        }
-        if (botCount < 0 || humans + botCount > maxPlayers) {
-            throw new GameException(LobbyErrorCode.INVALID_BOT_COUNT);
-        }
+            int humans = humanCount(room);
+            if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS || maxPlayers < humans) {
+                throw new GameException(LobbyErrorCode.INVALID_MAX_PLAYERS);
+            }
+            if (botCount < 0 || humans + botCount > maxPlayers) {
+                throw new GameException(LobbyErrorCode.INVALID_BOT_COUNT);
+            }
 
-        room.setConfig(config);
-        room.setMaxPlayers(maxPlayers);
-        syncBots(room, botCount);
-        repository.save(room);
-        return toInfo(room);
+            room.setConfig(config);
+            room.setMaxPlayers(maxPlayers);
+            syncBots(room, botCount);
+            repository.save(room);
+            return toInfo(room);
+        });
     }
 
     // 방에 있는 사람 수 (봇 제외)
@@ -251,20 +265,22 @@ public class LobbyService {
      * 방장은 항상 준비 상태라 바꾸려 하면 INVALID_STATE.
      */
     public synchronized RoomInfo setReady(String roomId, long playerId, boolean ready) {
-        Room room = findRoom(roomId);
-        if (!room.hasMember(playerId)) {
-            throw new GameException(LobbyErrorCode.NOT_IN_ROOM);
-        }
-        if (room.getStatus() != RoomStatus.WAITING) {
-            throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
-        }
-        if (room.getHostId() == playerId) {
-            throw new GameException(LobbyErrorCode.INVALID_STATE);
-        }
+        return roomLock.call(roomId, () -> {
+            Room room = findRoom(roomId);
+            if (!room.hasMember(playerId)) {
+                throw new GameException(LobbyErrorCode.NOT_IN_ROOM);
+            }
+            if (room.getStatus() != RoomStatus.WAITING) {
+                throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
+            }
+            if (room.getHostId() == playerId) {
+                throw new GameException(LobbyErrorCode.INVALID_STATE);
+            }
 
-        room.setReady(playerId, ready);
-        repository.save(room);
-        return toInfo(room);
+            room.setReady(playerId, ready);
+            repository.save(room);
+            return toInfo(room);
+        });
     }
 
     /**
@@ -275,31 +291,35 @@ public class LobbyService {
      * (startGame이 실패하면 방은 WAITING으로 남는다)
      */
     public synchronized RoomInfo start(String roomId, long playerId) {
-        Room room = findRoom(roomId);
-        if (room.getStatus() != RoomStatus.WAITING) {
-            throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
-        }
-        if (room.getHostId() != playerId) {
-            throw new GameException(LobbyErrorCode.NOT_HOST);
-        }
-        if (room.size() < GameConfig.MIN_PLAYERS) {
-            throw new GameException(LobbyErrorCode.NOT_ENOUGH_PLAYERS);
-        }
-        if (!room.allReady()) {
-            throw new GameException(LobbyErrorCode.NOT_ALL_READY);
-        }
+        return roomLock.call(roomId, () -> {
+            Room room = findRoom(roomId);
+            if (room.getStatus() != RoomStatus.WAITING) {
+                throw new GameException(LobbyErrorCode.ROOM_ALREADY_STARTED);
+            }
+            if (room.getHostId() != playerId) {
+                throw new GameException(LobbyErrorCode.NOT_HOST);
+            }
+            if (room.size() < GameConfig.MIN_PLAYERS) {
+                throw new GameException(LobbyErrorCode.NOT_ENOUGH_PLAYERS);
+            }
+            if (!room.allReady()) {
+                throw new GameException(LobbyErrorCode.NOT_ALL_READY);
+            }
 
-        Map<Long, String> nickNameMap = new HashMap<>();
-        Set<Long> botIds = new HashSet<>();
-        for (long memberId : room.memberIds()) {
-            nickNameMap.put(memberId, room.nicknameOf(memberId));
-            if (BotService.isBotId(memberId)) { botIds.add(memberId); }
-        }
+            Map<Long, String> nickNameMap = new HashMap<>();
+            Set<Long> botIds = new HashSet<>();
+            for (long memberId : room.memberIds()) {
+                nickNameMap.put(memberId, room.nicknameOf(memberId));
+                if (BotService.isBotId(memberId)) {
+                    botIds.add(memberId);
+                }
+            }
 
-        gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, room.getConfig());
-        room.setStatus(RoomStatus.PLAYING);
-        repository.save(room);
-        return toInfo(room);
+            gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, room.getConfig());
+            room.setStatus(RoomStatus.PLAYING);
+            repository.save(room);
+            return toInfo(room);
+        });
     }
 
     // ==== 방 삭제 ====
@@ -309,8 +329,10 @@ public class LobbyService {
      * 없는 방이면 ROOM_NOT_FOUND.
      */
     public synchronized void deleteRoom(String roomId) {
-        findRoom(roomId);
-        repository.deleteById(roomId);
+        roomLock.run(roomId, () -> {
+            findRoom(roomId);
+            repository.deleteById(roomId);
+        });
     }
 
     /**
@@ -321,13 +343,18 @@ public class LobbyService {
     @EventListener
     @Order(1)   // 방을 WAITING 상태로 먼저 되돌리고 그 후 연결 끊긴 멤버 정리(@Order(2)) 실행
     public synchronized void onGameEnded(GameEndedEvent event) {
-        repository.findById(event.roomId()).ifPresent(room -> {
-            room.setStatus(RoomStatus.WAITING);
-            room.memberIds().stream()
-                    .filter(id -> id != room.getHostId() && !BotService.isBotId(id))
-                    .forEach(id -> room.setReady(id, false));
-            repository.save(room);
-        });
+        try {
+            roomLock.run(event.roomId(), () -> repository.findById(event.roomId()).ifPresent(room -> {
+                room.setStatus(RoomStatus.WAITING);
+                room.memberIds().stream()
+                        .filter(id -> id != room.getHostId() && !BotService.isBotId(id))
+                        .forEach(id -> room.setReady(id, false));
+                repository.save(room);
+            }));
+        } catch (RuntimeException e) {
+            // 게임 요청을 처리하는 스레드에서 불리므로, 실패해도 뒤 리스너(끊긴 멤버 정리, 게임 상태 삭제)가 돌게 막는다
+            log.error("[로비] 게임 종료 후 방 되돌리기 실패: room={}", event.roomId(), e);
+        }
     }
 
     /**
@@ -335,12 +362,19 @@ public class LobbyService {
      * 내보낸 뒤 방이 남아 있으면 그 방 id(남은 사람에게 ROOM_UPDATED를 보내야 함), 아니면 empty.
      */
     public synchronized Optional<String> leaveWaitingRoom(long playerId) {
-        Optional<Room> room = repository.findRoomIdByPlayerId(playerId).flatMap(repository::findById);
-        if (room.isEmpty() || room.get().getStatus() != RoomStatus.WAITING) {
+        Optional<String> found = repository.findRoomIdByPlayerId(playerId);
+        if (found.isEmpty()) {
             return Optional.empty();
         }
-        String roomId = room.get().getRoomId();
-        return leave(roomId, playerId) ? Optional.of(roomId) : Optional.empty();
+        String roomId = found.get();
+        return roomLock.call(roomId, () -> {
+            // 락을 잡기 전에 다른 서버가 방을 바꿨을 수 있으니, 락 안에서 다시 읽어 확인한다
+            Optional<Room> room = repository.findById(roomId);
+            if (room.isEmpty() || room.get().getStatus() != RoomStatus.WAITING || !room.get().hasMember(playerId)) {
+                return Optional.<String>empty();
+            }
+            return leaveInLock(roomId, playerId) ? Optional.of(roomId) : Optional.<String>empty();
+        });
     }
 
     /** 방의 멤버 id 목록 (복사본). 방이 없으면 빈 목록. */
@@ -350,19 +384,35 @@ public class LobbyService {
                 .orElse(List.of());
     }
 
+    /** 대기 중(WAITING)인 방 id 목록. 유령 멤버 청소에 쓴다. */
+    public synchronized List<String> waitingRoomIds() {
+        return repository.findAll().stream()
+                .filter(room -> room.getStatus() == RoomStatus.WAITING)
+                .map(Room::getRoomId)
+                .toList();
+    }
+
     /**
-     * 대기방에서 여러 명을 내보낸다. 게임이 끝난 뒤 접속이 끊긴 멤버를 정리할 때 쓴다.
+     * 대기방에서 여러 명을 내보낸다. 게임 종료 후 끊긴 멤버 정리, 유령 멤버 청소에 쓴다.
+     * 이미 나간 사람이나 대기 중이 아닌 방은 건너뛴다. (확인과 정리 사이에 다른 서버가 방을 바꿨을 수 있다)
      * 방장이 나가면 방장이 넘어가고, 모두 나가면 방이 삭제된다. 방이 남아 있으면 true.
      */
     public synchronized boolean removeMembers(String roomId, Collection<Long> playerIds) {
-        boolean remains = repository.findById(roomId).isPresent();
-        for (long playerId : playerIds) {
-            if (!remains) {
-                break;
+        return roomLock.call(roomId, () -> {
+            for (long playerId : playerIds) {
+                Optional<Room> room = repository.findById(roomId);
+                if (room.isEmpty()) {
+                    return false;
+                }
+                if (room.get().getStatus() != RoomStatus.WAITING || !room.get().hasMember(playerId)) {
+                    continue;
+                }
+                if (!leaveInLock(roomId, playerId)) {
+                    return false;
+                }
             }
-            remains = leave(roomId, playerId);
-        }
-        return remains;
+            return repository.findById(roomId).isPresent();
+        });
     }
 
     // ==== 도우미 ====
