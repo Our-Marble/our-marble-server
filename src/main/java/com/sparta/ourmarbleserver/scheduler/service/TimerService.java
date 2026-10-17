@@ -41,7 +41,7 @@ public class TimerService {
     }
 
     /** 시간 초과가 난(AFK) 사람은 제한 시간 대신 이 시간만 기다린 뒤 바로 대신 진행한다. */
-    static final int AFK_DELAY_SECONDS = 3;
+    static final int AFK_DELAY_SECONDS = 6;
 
     /** 요청을 처리하는 동안 늘려 두는 마감시간. 처리 중에 서버가 죽으면 이 시간 뒤에 대신 진행된다. */
     static final long DEFAULT_LEASE_MILLIS = 10_000;

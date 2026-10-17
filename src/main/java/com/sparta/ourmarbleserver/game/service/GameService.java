@@ -56,7 +56,7 @@ public class GameService {
     /**
      * 봇 차례는 사람처럼 제한 시간을 기다리지 않고 이 시간(초) 뒤에 바로 진행한다.
      */
-    private static final int BOT_DELAY_SECONDS = 3;
+    private static final int BOT_DELAY_SECONDS = 6;
 
     /**
      * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.

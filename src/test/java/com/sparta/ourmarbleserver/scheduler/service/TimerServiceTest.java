@@ -209,8 +209,8 @@ class TimerServiceTest {
 
         assertThat(waitTimeout(4500)).isEqualTo("r1");   // 첫 입력은 제한 시간(4초)
         assertThat(timer.isAfk("r1", 1L)).isTrue();
-        assertThat(waitTimeout(2500)).isNull();          // AFK 대기 3초가 지나기 전
-        assertThat(waitTimeout(1000)).isEqualTo("r1");   // 다음은 3초 만에
+        assertThat(waitTimeout(5500)).isNull();          // AFK 대기 6초가 지나기 전
+        assertThat(waitTimeout(1000)).isEqualTo("r1");   // 다음은 6초 만에
     }
 
     @Test
