@@ -9,6 +9,7 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.RoomInfo;
 import com.sparta.ourmarbleserver.lobby.dto.RoomStatus;
+import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomLock;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import org.junit.jupiter.api.Test;
@@ -27,7 +28,7 @@ class ChatServiceTest {
 
     private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final LobbyService lobbyService =
-            new LobbyService(repository, mock(GameService.class), new FakePlayerService(), mock(BotService.class));
+            new LobbyService(repository, mock(GameService.class), new FakePlayerService(), mock(BotService.class), new InMemoryRoomLock());
     private final ChatService chatService = new ChatService(lobbyService);
 
     /** DB 없이 닉네임을 돌려주는 PlayerService. */

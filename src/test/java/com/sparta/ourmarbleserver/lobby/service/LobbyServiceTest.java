@@ -4,26 +4,25 @@ import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
-import com.sparta.ourmarbleserver.game.service.GameDataService;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
-import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.ErrorCode;
 import com.sparta.ourmarbleserver.global.protocol.LobbyErrorCode;
 import com.sparta.ourmarbleserver.lobby.dto.*;
+import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomLock;
 import com.sparta.ourmarbleserver.lobby.state.InMemoryRoomRepository;
 import com.sparta.ourmarbleserver.lobby.state.Room;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import tools.jackson.databind.json.JsonMapper;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
@@ -82,8 +81,9 @@ class LobbyServiceTest {
 
     private final RecordingGameService gameService = new RecordingGameService();
     private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
+    private final InMemoryRoomLock roomLock = new InMemoryRoomLock();
     private final LobbyService service =
-            new LobbyService(repository, gameService.mock, new FakePlayerService(), newBotService());
+            new LobbyService(repository, gameService.mock, new FakePlayerService(), newBotService(), roomLock);
 
     /** Redis INCR 대신 메모리 카운터로 번호를 주는 진짜 BotService. (-1, -2, ...) */
     @SuppressWarnings("unchecked")
@@ -957,5 +957,63 @@ class LobbyServiceTest {
         assertThat(service.roomUpdated(room.roomId()).room().players())
                 .extracting(RoomUpdatedPayload.PlayerSnapshot::nickname, RoomUpdatedPayload.PlayerSnapshot::bot)
                 .containsExactly(Tuple.tuple("닉1", false), Tuple.tuple("봇1", true));
+    }
+
+    // ===== 서버 사이 동시 수정 (방 락) =====
+
+    @Test
+    void 방을_바꾸는_요청은_그_방의_락_안에서_처리한다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        String id = room.roomId();
+
+        service.join(id, P2);
+        service.setReady(id, P2, true);
+        service.setRoomConfig(id, HOST, NEW_CONFIG, 4, 0);
+        service.start(id, HOST);
+
+        assertThat(roomLock.lockedRooms()).containsExactly(id, id, id, id);
+    }
+
+    @Test
+    void 락을_못_잡으면_ROOM_BUSY이고_방은_그대로다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        roomLock.setBusy(true);
+
+        assertError(LobbyErrorCode.ROOM_BUSY, () -> service.join(room.roomId(), P2));
+
+        roomLock.setBusy(false);
+        assertThat(service.memberIdsOf(room.roomId())).containsExactly(HOST);
+    }
+
+    @Test
+    void 게임_종료_처리에서_락을_못_잡아도_예외를_던지지_않는다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        roomLock.setBusy(true);
+
+        assertThatCode(() -> service.onGameEnded(new GameEndedEvent(room.roomId()))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void 여러_명을_내보낼_때_이미_나간_사람은_건너뛴다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        service.join(room.roomId(), P2);
+        service.join(room.roomId(), P3);
+        service.leave(room.roomId(), P2);   // 정리 전에 먼저 나감
+
+        boolean remains = service.removeMembers(room.roomId(), List.of(P2, P3));
+
+        assertThat(remains).isTrue();
+        assertThat(service.memberIdsOf(room.roomId())).containsExactly(HOST);
+    }
+
+    @Test
+    void 대기_중인_방_id만_돌려준다() {
+        RoomInfo waiting = service.createRoom(HOST, MAP, 4);
+        RoomInfo playing = service.createRoom(P3, MAP, 4);
+        service.join(playing.roomId(), P4);
+        service.setReady(playing.roomId(), P4, true);
+        service.start(playing.roomId(), P3);
+
+        assertThat(service.waitingRoomIds()).containsExactly(waiting.roomId());
     }
 }
