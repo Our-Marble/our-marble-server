@@ -22,7 +22,7 @@ public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int
     public static final int DEFAULT_MAX_ROUND = 30;
     public static final int DEFAULT_ISLAND_TURNS = 3;
     public static final int DEFAULT_MAP_ID = 1;
-    public static final int DEFAULT_LIMIT_TIME_SECONDS = 20;
+    public static final int DEFAULT_LIMIT_TIME_SECONDS = 60;
 
     /** 한 게임에 참가할 수 있는 플레이어 수의 한계. 방장이 바꾸는 설정이 아니라 서버 규칙의 한계다. */
     public static final int MIN_PLAYERS = 2;
