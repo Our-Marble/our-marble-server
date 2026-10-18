@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /*
 * 한 플레이어는 하나의 연결만 가짐
-* 같은 playerId로 재접속 시 이전 연결 끊고 새 연결로 교체
+* 같은 playerId로 재접속 시 이전 연결 끊고 새 연결로 교체 (같은 서버면 직접, 다른 서버면 그 서버에 요청)
 */
 @Slf4j
 @Component
@@ -36,6 +36,7 @@ public class SessionRegistry {
 
     private final PresenceRepository presence;
     private final ServerInstance server;
+    private final SessionKickPublisher kickPublisher;
 
     // 연결 등록
     public WebSocketSession register(long playerId, WebSocketSession session) {
@@ -45,7 +46,8 @@ public class SessionRegistry {
 
         // 2. put → previous 받기
         WebSocketSession previous = sessions.put(playerId, decorated);
-        presence.markOnline(playerId, tokenOf(session));   // 어느 서버에서든 "접속 중"으로 보이게
+        String previousToken = presence.markOnline(playerId, tokenOf(session));   // 어느 서버에서든 "접속 중"으로 보이게
+        kickOnOtherServer(playerId, previousToken);                              // 다른 서버에 옛 연결이 있으면 끊어 달라고 요청
         log.info("[WS] 등록: player={} session={}", playerId, session.getId());
 
         // 3. previous 있으면 DUPLICATE_LOGIN으로 close (try-catch)
@@ -108,6 +110,41 @@ public class SessionRegistry {
     }
 
     // 이 서버의 연결들의 접속 기록 만료 시간을 연장한다. 서버가 죽으면 연장이 멈춰 TTL 뒤에 기록이 사라진다.
+    // 이전 기록이 다른 서버의 연결이면, 그 서버에게 끊어 달라고 요청한다.
+    // 같은 서버의 이전 연결은 register에서 sessions.put의 이전 값으로 직접 끊는다.
+    private void kickOnOtherServer(long playerId, String previousToken) {
+        if (previousToken == null) {
+            return;
+        }
+        int separator = previousToken.indexOf(':');
+        String serverId = previousToken.substring(0, separator);
+        if (serverId.equals(server.id())) {
+            return;
+        }
+        String sessionId = previousToken.substring(separator + 1);
+        log.info("[WS] 다른 서버 중복 접속: player={} 옛 연결={} 종료 요청", playerId, previousToken);
+        try {
+            kickPublisher.kick(serverId, playerId, sessionId);
+        } catch (RuntimeException e) {
+            log.warn("[WS] 다른 서버에 종료 요청 실패: player={} {}", playerId, e.getMessage());
+        }
+    }
+
+    // 다른 서버에 같은 계정이 새로 접속했다는 요청. 이 서버의 그 연결이 아직 요청받은 그 연결일 때만 끊는다.
+    // (요청이 오는 사이 이 서버에서 또 재접속했다면 세션 id가 달라서 새 연결은 건드리지 않는다)
+    public void closeDuplicate(long playerId, String sessionId) {
+        WebSocketSession current = sessions.get(playerId);
+        if (current == null || !current.isOpen() || !current.getId().equals(sessionId)) {
+            return;
+        }
+        log.info("[WS] 다른 서버 접속으로 옛 연결 종료: player={} session={}", playerId, sessionId);
+        try {
+            current.close(SessionCloseCodes.DUPLICATE_LOGIN);
+        } catch (IOException e) {
+            log.warn("[WS] 옛 연결 종료 실패: player={} {}", playerId, e.getMessage());
+        }
+    }
+
     @Scheduled(fixedDelay = PRESENCE_REFRESH_MILLIS)
     public void refreshPresence() {
         Map<Long, String> tokens = new HashMap<>();

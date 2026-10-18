@@ -24,6 +24,14 @@ public class RedisPresenceRepository implements PresenceRepository {
     static final String KEY_PREFIX = "ws:presence:";
     static final Duration TTL = Duration.ofSeconds(60);
 
+    // KEYS[1] = presence 키 / ARGV[1] = token, ARGV[2] = TTL(ms) / 반환: 이전 token (없으면 nil)
+    // 교체와 이전 값 읽기를 한 번에 해서, 두 서버가 동시에 접속 처리를 해도 각자 정확한 직전 값을 받는다
+    private static final RedisScript<String> REPLACE = new DefaultRedisScript<>("""
+            local previous = redis.call('GET', KEYS[1])
+            redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+            return previous
+            """, String.class);
+
     // KEYS[1] = presence 키 / ARGV[1] = token
     private static final RedisScript<Long> DELETE_IF_MINE = new DefaultRedisScript<>("""
             if redis.call('GET', KEYS[1]) == ARGV[1] then
@@ -48,8 +56,8 @@ public class RedisPresenceRepository implements PresenceRepository {
     private final StringRedisTemplate redisTemplate;
 
     @Override
-    public void markOnline(long playerId, String token) {
-        redisTemplate.opsForValue().set(key(playerId), token, TTL);
+    public String markOnline(long playerId, String token) {
+        return redisTemplate.execute(REPLACE, List.of(key(playerId)), token, String.valueOf(TTL.toMillis()));
     }
 
     @Override
