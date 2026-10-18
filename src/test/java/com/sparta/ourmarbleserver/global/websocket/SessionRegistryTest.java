@@ -18,12 +18,14 @@ import static org.mockito.Mockito.*;
 class SessionRegistryTest {
 
     private InMemoryPresenceRepository presence;
+    private SessionKickPublisher kickPublisher;
     private SessionRegistry registry;
 
     @BeforeEach
     void setUp() {
         presence = new InMemoryPresenceRepository();
-        registry = new SessionRegistry(presence, new ServerInstance("A"));   // 이 서버는 A
+        kickPublisher = mock(SessionKickPublisher.class);
+        registry = new SessionRegistry(presence, new ServerInstance("A"), kickPublisher);   // 이 서버는 A
     }
 
     /** 열려 있는 가짜 세션 */
@@ -128,7 +130,7 @@ class SessionRegistryTest {
     @Test
     void 이_서버의_연결들만_연장한다() {
         PresenceRepository mockPresence = mock(PresenceRepository.class);
-        SessionRegistry registry = new SessionRegistry(mockPresence, new ServerInstance("A"));
+        SessionRegistry registry = new SessionRegistry(mockPresence, new ServerInstance("A"), mock(SessionKickPublisher.class));
         registry.register(1L, openSession("a"));
         registry.register(2L, openSession("b"));
 
@@ -141,7 +143,7 @@ class SessionRegistryTest {
     void 접속_기록_삭제가_실패해도_종료_처리는_예외가_나지_않는다() {
         PresenceRepository mockPresence = mock(PresenceRepository.class);
         doThrow(new RuntimeException("Redis 끊김")).when(mockPresence).markOffline(anyLong(), anyString());
-        SessionRegistry registry = new SessionRegistry(mockPresence, new ServerInstance("A"));
+        SessionRegistry registry = new SessionRegistry(mockPresence, new ServerInstance("A"), mock(SessionKickPublisher.class));
         WebSocketSession a = openSession("a");
         registry.register(1L, a);
 
@@ -159,5 +161,55 @@ class SessionRegistryTest {
 
         verify(a).close(CloseStatus.SERVICE_RESTARTED);
         verify(b).close(CloseStatus.SERVICE_RESTARTED);
+    }
+
+    // ===== 서버 간 중복 로그인 =====
+
+    @Test
+    void 다른_서버에_옛_연결이_있으면_그_서버에_끊기를_요청한다() {
+        presence.markOnline(1L, "B:x");   // 서버 B에 붙어 있음
+
+        registry.register(1L, openSession("a"));
+
+        verify(kickPublisher).kick("B", 1L, "x");
+        assertThat(presence.tokenOf(1L)).isEqualTo("A:a");
+    }
+
+    @Test
+    void 같은_서버의_옛_연결이면_요청하지_않고_직접_끊는다() throws Exception {
+        WebSocketSession a = openSession("a");
+        registry.register(1L, a);
+
+        registry.register(1L, openSession("b"));
+
+        verify(kickPublisher, never()).kick(anyString(), anyLong(), anyString());
+        verify(a).close(SessionCloseCodes.DUPLICATE_LOGIN);
+    }
+
+    @Test
+    void 처음_접속하면_요청하지_않는다() {
+        registry.register(1L, openSession("a"));
+
+        verify(kickPublisher, never()).kick(anyString(), anyLong(), anyString());
+    }
+
+    @Test
+    void 끊기_요청을_받으면_그_연결이_맞을_때만_끊는다() throws Exception {
+        WebSocketSession a = openSession("a");
+        registry.register(1L, a);
+
+        registry.closeDuplicate(1L, "a");
+
+        verify(a).close(SessionCloseCodes.DUPLICATE_LOGIN);
+    }
+
+    @Test
+    void 그새_다른_연결로_바뀌었으면_끊지_않는다() throws Exception {
+        WebSocketSession a = openSession("a");
+        registry.register(1L, a);
+
+        registry.closeDuplicate(1L, "old");   // 예전 연결을 끊어 달라는 늦은 요청
+
+        verify(a, never()).close(any());
     }
 }

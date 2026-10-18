@@ -9,8 +9,8 @@ public class InMemoryPresenceRepository implements PresenceRepository {
     private final Map<Long, String> tokens = new ConcurrentHashMap<>();
 
     @Override
-    public void markOnline(long playerId, String token) {
-        tokens.put(playerId, token);
+    public String markOnline(long playerId, String token) {
+        return tokens.put(playerId, token);   // Map.put은 이전 값을 돌려준다
     }
 
     @Override

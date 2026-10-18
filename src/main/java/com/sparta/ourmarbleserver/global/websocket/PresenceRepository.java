@@ -9,8 +9,8 @@ import java.util.Map;
  */
 public interface PresenceRepository {
 
-    // 접속 기록, 새 연결 들어오면 덮어쓴다
-    void markOnline(long playerId, String token);
+    // 접속 기록, 새 연결 들어오면 덮어쓰고 이전 token을 돌려준다 (없었으면 null)
+    String markOnline(long playerId, String token);
 
     // 기록과 토큰이 일치하면 삭제 (새 연결 삭제 방지)
     void markOffline(long playerId, String token);
