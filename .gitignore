@@ -55,3 +55,6 @@ out/
 .vscode/
 
 HELP.md
+
+# Local Docker environment
+.env

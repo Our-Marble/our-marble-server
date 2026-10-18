@@ -1,0 +1,156 @@
+{
+  "mapId": 1,
+  "tiles": [
+    {
+      "index": 0,
+      "type": "START"
+    },
+    {
+      "index": 1,
+      "type": "PROPERTY",
+      "propertyId": 101
+    },
+    {
+      "index": 2,
+      "type": "GOLDEN_KEY"
+    },
+    {
+      "index": 3,
+      "type": "PROPERTY",
+      "propertyId": 103
+    },
+    {
+      "index": 4,
+      "type": "PROPERTY",
+      "propertyId": 104
+    },
+    {
+      "index": 5,
+      "type": "PROPERTY",
+      "propertyId": 105
+    },
+    {
+      "index": 6,
+      "type": "PROPERTY",
+      "propertyId": 106
+    },
+    {
+      "index": 7,
+      "type": "PROPERTY",
+      "propertyId": 107
+    },
+    {
+      "index": 8,
+      "type": "ISLAND"
+    },
+    {
+      "index": 9,
+      "type": "PROPERTY",
+      "propertyId": 109
+    },
+    {
+      "index": 10,
+      "type": "PROPERTY",
+      "propertyId": 110
+    },
+    {
+      "index": 11,
+      "type": "GOLDEN_KEY"
+    },
+    {
+      "index": 12,
+      "type": "PROPERTY",
+      "propertyId": 112
+    },
+    {
+      "index": 13,
+      "type": "PROPERTY",
+      "propertyId": 113
+    },
+    {
+      "index": 14,
+      "type": "PROPERTY",
+      "propertyId": 114
+    },
+    {
+      "index": 15,
+      "type": "PROPERTY",
+      "propertyId": 115
+    },
+    {
+      "index": 16,
+      "type": "CHARITY"
+    },
+    {
+      "index": 17,
+      "type": "PROPERTY",
+      "propertyId": 117
+    },
+    {
+      "index": 18,
+      "type": "PROPERTY",
+      "propertyId": 118
+    },
+    {
+      "index": 19,
+      "type": "PROPERTY",
+      "propertyId": 119
+    },
+    {
+      "index": 20,
+      "type": "GOLDEN_KEY"
+    },
+    {
+      "index": 21,
+      "type": "PROPERTY",
+      "propertyId": 121
+    },
+    {
+      "index": 22,
+      "type": "PROPERTY",
+      "propertyId": 122
+    },
+    {
+      "index": 23,
+      "type": "PROPERTY",
+      "propertyId": 123
+    },
+    {
+      "index": 24,
+      "type": "WORLD_TRAVEL"
+    },
+    {
+      "index": 25,
+      "type": "PROPERTY",
+      "propertyId": 125
+    },
+    {
+      "index": 26,
+      "type": "PROPERTY",
+      "propertyId": 126
+    },
+    {
+      "index": 27,
+      "type": "PROPERTY",
+      "propertyId": 127
+    },
+    {
+      "index": 28,
+      "type": "GOLDEN_KEY"
+    },
+    {
+      "index": 29,
+      "type": "PROPERTY",
+      "propertyId": 129
+    },
+    {
+      "index": 30,
+      "type": "DONATION"
+    },
+    {
+      "index": 31,
+      "type": "PROPERTY",
+      "propertyId": 131
+    }
+  ]
+}
