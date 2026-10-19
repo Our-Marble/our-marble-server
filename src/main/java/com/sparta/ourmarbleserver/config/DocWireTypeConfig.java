@@ -42,7 +42,8 @@ public class DocWireTypeConfig {
             Map.entry("SELL_PROPERTIES", "PROPERTIES_SOLD"),
             Map.entry("GAME_STATE_REQUEST", "GAME_STATE_SYNC"),
             Map.entry("ROOM_LIST_REQUEST", "ROOM_LIST"),
-            Map.entry("START_GAME", "GAME_STARTED"));
+            Map.entry("START_GAME", "GAME_STARTED"),
+            Map.entry("CHAT_SEND", "CHAT_BROADCAST"));
 
     @Bean
     public OpenApiCustomizer wireTypeCustomizer() {

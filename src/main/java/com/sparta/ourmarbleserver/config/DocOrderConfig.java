@@ -19,6 +19,10 @@ public class DocOrderConfig {
 
     /** 문서에 나오는 순서 (명세 표 순서). Redoc은 이 순서 그대로 보여 준다. */
     private static final List<String> DOC_ORDER = List.of(
+            // 오류
+            "/docs/notifications/common-error",
+            "/docs/notifications/lobby-error",
+            "/docs/notifications/game-error",
             // 로비
             "/docs/notifications/connected",
             "/docs/notifications/player-record",
@@ -27,28 +31,24 @@ public class DocOrderConfig {
             "/docs/requests/enter-room",
             // 대기실
             "/docs/notifications/room-updated",
-            "/docs/requests/leave-room",
-            "/docs/requests/set-ready",
             "/docs/requests/room-config-request",
+            "/docs/requests/set-ready",
             "/docs/requests/start-game",
+            "/docs/requests/leave-room",
             // 인게임
-            "/docs/requests/roll-dice",
+            "/docs/requests/build",
             "/docs/requests/draw-card",
             "/docs/requests/choose-destination",
+            "/docs/requests/roll-dice",
             "/docs/requests/purchase-property",
-            "/docs/requests/build",
             "/docs/requests/acquire-property",
             "/docs/requests/sell-properties",
             "/docs/requests/game-state-request",
             // 채팅
-            "/docs/requests/chat-send",
-            // 오류
-            "/docs/notifications/common-error",
-            "/docs/notifications/lobby-error",
-            "/docs/notifications/game-error");
+            "/docs/requests/chat-send");
 
     /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
-    private static final List<String> TAG_ORDER = List.of("로비", "대기실", "인게임", "채팅", "오류 알림");
+    private static final List<String> TAG_ORDER = List.of("오류 알림", "로비", "대기실", "인게임", "채팅");
 
 
     /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */

@@ -62,7 +62,8 @@ public class LobbyDocController {
 
     @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 대기실을 만든다. 요청 본문은 없다. 맵과 최대 인원은 이 요청에 없다. 만들 때는 기본 맵으로 정해지고, 클라가 이어서 보내는 ROOM_CONFIG_REQUEST로 맵과 최대 인원을 정한다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 요청자에게 ROOM_ENTERED, 대기실 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
             + "오류: ALREADY_IN_ROOM (이미 어떤 방에 있음, 시작한 방 포함)")
-    @ApiResponse(responseCode = "200", description = "**ROOM_ENTERED** — 방 입장과 같은 알림이 요청자에게 간다. 필드와 설명은 \"방입장\" 페이지를 본다.\n\n")
+    @ApiResponse(responseCode = "200", description = "**ROOM_ENTERED** — 방 입장과 같은 알림이 요청자에게 간다. 필드와 설명은 \"방입장\" 페이지를 본다.\n\n"
+            + "**ROOM_UPDATED** — 대기실 전원에게 새 상태가 간다. 필드와 언제 가는지는 대기실의 \"방상태변경\" 페이지를 본다.")
     @ApiResponse(responseCode = "400", description = "거절되면 **LOBBY_ERROR**가 요청자에게만 가고 서버 상태는 바뀌지 않는다. 가능한 오류 코드는 오른쪽 예시에서 고를 수 있다. 메시지 형식이 틀리면 COMMON_ERROR(INVALID_MESSAGE)가 간다.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
                     examples = {
@@ -73,13 +74,15 @@ public class LobbyDocController {
     }
 
     @Operation(summary = "방입장", description = "type: ENTER_ROOM. 대기실에 입장한다. roomId는 대기실 목록(ROOM_LIST)에서 고른 방 번호이거나, 코드로 입장할 때 입력한 방 번호다. 결과는 요청자에게 ROOM_ENTERED, 대기실 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"
-            + "오류 (검증 순서): ROOM_NOT_FOUND (없는 방) → ROOM_ALREADY_STARTED (시작한 방) → ALREADY_IN_ROOM (이미 어떤 방에 있음) → ROOM_FULL (가득 참)")
-    @ApiResponse(responseCode = "200", description = "**ROOM_ENTERED** — 대기실을 만들거나 대기실에 들어가는 데 성공했다는 알림으로 요청자에게만 간다. 클라는 이 알림으로 대기실 화면으로 넘어간다. payload는 없고, 대기실 상태는 ROOM_UPDATED로 온다.\n\n",
+            + "오류 (검증 순서): ROOM_BUSY (방이 다른 요청을 처리 중) → ROOM_NOT_FOUND (없는 방) → ROOM_ALREADY_STARTED (시작한 방) → ALREADY_IN_ROOM (이미 어떤 방에 있음) → ROOM_FULL (가득 참)")
+    @ApiResponse(responseCode = "200", description = "**ROOM_ENTERED** — 대기실을 만들거나 대기실에 들어가는 데 성공했다는 알림으로 요청자에게만 간다. 클라는 이 알림으로 대기실 화면으로 넘어간다. payload는 없고, 대기실 상태는 ROOM_UPDATED로 온다.\n\n"
+            + "**ROOM_UPDATED** — 대기실 전원에게 새 상태가 간다. 필드와 언제 가는지는 대기실의 \"방상태변경\" 페이지를 본다.",
             content = @Content(mediaType = "application/json", schema = @Schema(type = "object"),
                     examples = @ExampleObject(name = "ROOM_ENTERED", summary = "ROOM_ENTERED", value = DocExamples.ROOM_ENTERED)))
     @ApiResponse(responseCode = "400", description = "거절되면 **LOBBY_ERROR**가 요청자에게만 가고 서버 상태는 바뀌지 않는다. 가능한 오류 코드는 오른쪽 예시에서 고를 수 있다. 메시지 형식이 틀리면 COMMON_ERROR(INVALID_MESSAGE)가 간다.",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
                     examples = {
+                            @ExampleObject(name = "ROOM_BUSY", summary = "ROOM_BUSY", value = DocExamples.LOBBY_ROOM_BUSY),
                             @ExampleObject(name = "ROOM_NOT_FOUND", summary = "ROOM_NOT_FOUND", value = DocExamples.LOBBY_ROOM_NOT_FOUND),
                             @ExampleObject(name = "ROOM_ALREADY_STARTED", summary = "ROOM_ALREADY_STARTED", value = DocExamples.LOBBY_ROOM_ALREADY_STARTED),
                             @ExampleObject(name = "ALREADY_IN_ROOM", summary = "ALREADY_IN_ROOM", value = DocExamples.LOBBY_ALREADY_IN_ROOM),
