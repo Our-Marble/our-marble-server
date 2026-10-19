@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -42,9 +43,12 @@ public class AuthController {
     private final EmailVerificationService emailVerificationService;
 
     @Operation(summary = "회원가입", description = "이메일, 비밀번호, 닉네임으로 가입한다. 로그인 없이 호출할 수 있다.")
-    @ApiResponse(responseCode = "201", description = "가입 성공. 만들어진 회원 정보를 돌려준다.")
+    @ApiResponse(responseCode = "201", description = "가입 성공. 만들어진 회원 정보(id, email, nickname)를 돌려준다. 비밀번호는 돌려주지 않는다. id는 게임 메시지의 playerId와 같은 값이다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PlayerResponse.class),
+                    examples = @ExampleObject(name = "가입 성공", value = "{\"id\": 1, \"email\": \"player@example.com\", \"nickname\": \"Alice\"}")))
     @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나, 비어 있는 값이 있거나, 닉네임이 20자를 넘거나, 이메일 인증을 하지 않음",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = @ExampleObject(name = "이메일 인증을 하지 않음", value = "{\"message\": \"이메일 인증이 필요합니다.\"}")))
     @PostMapping("/signup")
     public ResponseEntity<PlayerResponse> signup(
             @Valid @RequestBody SignupRequest body
@@ -61,11 +65,16 @@ public class AuthController {
     @Operation(summary = "이메일 인증번호 발송", description = "입력한 이메일로 6자리 인증번호를 발송한다. 인증번호는 5분 동안 유효하다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "204", description = "인증번호 발송 성공 (본문 없음)")
     @ApiResponse(responseCode = "400", description = "이메일 형식이 아니거나 이메일이 비어 있음",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = {
+                            @ExampleObject(name = "이메일 형식이 틀림", value = "{\"message\": \"이메일 형식이 올바르지 않습니다.\"}"),
+                            @ExampleObject(name = "이메일이 비어 있음", value = "{\"message\": \"이메일을 입력해 주세요.\"}")}))
     @ApiResponse(responseCode = "409", description = "이미 가입된 이메일",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = @ExampleObject(name = "이미 가입된 이메일", value = "{\"message\": \"이미 가입된 이메일입니다.\"}")))
     @ApiResponse(responseCode = "502", description = "메일 서버를 통한 발송 실패",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = @ExampleObject(name = "메일 발송 실패", value = "{\"message\": \"인증 메일 발송에 실패했습니다.\"}")))
     @PostMapping("/email/send")
     public ResponseEntity<Void> emailSend(
             @Valid @RequestBody EmailSendRequest request
@@ -77,7 +86,11 @@ public class AuthController {
     @Operation(summary = "이메일 인증번호 확인", description = "이메일로 받은 6자리 인증번호를 확인한다. 성공하면 해당 이메일은 30분 동안 회원가입할 수 있다. 로그인 없이 호출할 수 있다.")
     @ApiResponse(responseCode = "204", description = "이메일 인증 성공 (본문 없음)")
     @ApiResponse(responseCode = "400", description = "인증번호가 틀렸거나, 없거나, 만료됐거나, 6자리 숫자가 아님",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = {
+                            @ExampleObject(name = "인증번호가 없거나 만료됨", value = "{\"message\": \"인증번호가 없거나 만료되었습니다.\"}"),
+                            @ExampleObject(name = "인증번호가 틀림", value = "{\"message\": \"인증번호가 일치하지 않습니다.\"}"),
+                            @ExampleObject(name = "6자리 숫자가 아님", value = "{\"message\": \"인증번호는 6자리 숫자여야 합니다.\"}")}))
     @PostMapping("/email/verify")
     public ResponseEntity<Void> emailVerify(
             @Valid @RequestBody EmailVerifyRequest request
@@ -87,9 +100,12 @@ public class AuthController {
     }
 
     @Operation(summary = "로그인", description = "이메일과 비밀번호가 맞으면 accessToken(JWT)을 돌려준다. 로그인 없이 호출할 수 있다.")
-    @ApiResponse(responseCode = "200", description = "로그인 성공")
+    @ApiResponse(responseCode = "200", description = "로그인 성공. accessToken(JWT)을 돌려준다. 30분 뒤 만료되고, 이후 요청의 Authorization 헤더에 \"Bearer {accessToken}\"으로 보낸다. 웹소켓 접속에도 같은 토큰을 쓴다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AccessTokenResponse.class),
+                    examples = @ExampleObject(name = "로그인 성공", value = "{\"accessToken\": \"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature\"}")))
     @ApiResponse(responseCode = "401", description = "없는 이메일이거나 비밀번호가 틀림",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class),
+                    examples = @ExampleObject(name = "이메일 또는 비밀번호가 틀림", value = "{\"message\": \"이메일 또는 비밀번호가 올바르지 않습니다.\"}")))
     @PostMapping("/login")
     public ResponseEntity<AccessTokenResponse> login(
             @RequestBody LoginRequest request

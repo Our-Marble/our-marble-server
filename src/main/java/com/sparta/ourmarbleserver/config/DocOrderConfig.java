@@ -23,6 +23,12 @@ public class DocOrderConfig {
             "/docs/notifications/common-error",
             "/docs/notifications/lobby-error",
             "/docs/notifications/game-error",
+            // 로그인
+            "/auth/signup",
+            "/auth/login",
+            "/auth/email/send",
+            "/auth/email/verify",
+            "/auth/logout",
             // 로비
             "/docs/notifications/connected",
             "/docs/notifications/player-record",
@@ -45,7 +51,11 @@ public class DocOrderConfig {
             "/docs/requests/sell-properties",
             "/docs/requests/game-state-request",
             // 채팅
-            "/docs/requests/chat-send");
+            "/docs/requests/chat-send",
+            // 플레이어
+            "/players/me",
+            "/players/me/play-record");
+
 
     /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
     private static final List<String> TAG_ORDER = List.of("오류 알림", "로그인", "로비", "대기실", "인게임", "채팅", "플레이어");
