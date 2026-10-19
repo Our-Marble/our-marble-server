@@ -61,12 +61,16 @@ public class LobbyService {
             throw new GameException(LobbyErrorCode.INVALID_STATE);
         }
         requireNotInAnyRoom(playerId);
+        String nickname = nicknameOf(playerId);   // DB 조회는 락 밖에서
 
-        Room room = new Room(repository.nextRoomId(), playerId, mapId, maxPlayers);
-        room.addMember(playerId, true);
-        room.setNickname(playerId, nicknameOf(playerId));
-        repository.save(room);
-        return toInfo(room);
+        String roomId = repository.nextRoomId();
+        return roomLock.call(roomId, () -> {
+            Room room = new Room(roomId, playerId, mapId, maxPlayers);
+            room.addMember(playerId, true);
+            room.setNickname(playerId, nickname);
+            repository.save(room);
+            return toInfo(room);
+        });
     }
 
     /** 대기 중(WAITING)인 방 목록 */
@@ -133,6 +137,7 @@ public class LobbyService {
      */
     public RoomInfo join(String roomId, long playerId) {
         String nickname = nicknameOf(playerId); // DB 조회는 방 락을 잡기 전에 한다. (락을 쥔 채로 DB를 기다리지 않게)
+
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (room.getStatus() != RoomStatus.WAITING) {
