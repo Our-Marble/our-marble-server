@@ -16,8 +16,8 @@ import java.util.stream.Collectors;
  * - lobby:player-room    playerId → roomId (Hash, 한 사람은 방 하나)
  * - lobby:room-seq       방 번호 (INCR)
  * findById는 매번 새 Room을 만들어 돌려주므로, Room을 고친 뒤에는 반드시 save를 불러야 한다.
- * 여러 명령을 차례로 보내므로 원자적이지 않다. 지금은 LobbyService의 synchronized가 한 서버 안의 순서를 지키고,
- * 서버 사이 동시 수정은 추후 분산 락 구성 단계에서 막는다.
+ * 여러 명령을 차례로 보내므로 원자적이지 않다. 같은 방을 동시에 고치는 일은 LobbyService가 방 락(RoomLock) 안에서만
+ * save/deleteById를 불러서 막는다. (서버 안의 다른 스레드, 다른 서버 모두)
  */
 @Component
 @RequiredArgsConstructor

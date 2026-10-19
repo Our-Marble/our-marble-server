@@ -959,7 +959,7 @@ class LobbyServiceTest {
                 .containsExactly(Tuple.tuple("닉1", false), Tuple.tuple("봇1", true));
     }
 
-    // ===== 서버 사이 동시 수정 (방 락) =====
+    // ===== 동시 수정 (방 락: 다른 서버, 같은 서버의 다른 스레드 모두) =====
 
     @Test
     void 방을_바꾸는_요청은_그_방의_락_안에서_처리한다() {
@@ -971,7 +971,8 @@ class LobbyServiceTest {
         service.setRoomConfig(id, HOST, NEW_CONFIG, 4, 0);
         service.start(id, HOST);
 
-        assertThat(roomLock.lockedRooms()).containsExactly(id, id, id, id);
+        // 방 만들기, 참가, 준비, 설정, 시작 (방 만들기도 저장을 그 방의 락 안에서 한다)
+        assertThat(roomLock.lockedRooms()).containsExactly(id, id, id, id, id);
     }
 
     @Test
