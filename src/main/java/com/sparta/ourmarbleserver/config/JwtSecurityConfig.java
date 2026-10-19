@@ -28,6 +28,9 @@ public class JwtSecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/docs.html", "/v3/api-docs", "/v3/api-docs/**", "/docs/notifications/**").permitAll() // Redoc API 문서 화면
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll() // Actuator 헬스체크 및 정보 허용
+                        // 만약 개발 환경에서 모든 Actuator 엔드포인트를 허용하고 싶다면 아래 주석처럼 설정 가능:
+                        // .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/posts").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/auth/signup",

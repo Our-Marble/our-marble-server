@@ -1,5 +1,7 @@
 package com.sparta.ourmarbleserver.scheduler.service;
 
+import com.sparta.ourmarbleserver.game.state.GameState;
+import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.scheduler.repository.TimerRepository;
 import jakarta.annotation.PreDestroy;
@@ -22,7 +24,8 @@ import java.util.concurrent.TimeUnit;
  * 요청 하나의 흐름 (GameService)
  * 1. validate → tryAcquire: 마감 전이고 처리 중인 요청이 없으면 리스를 잡고 마감을 '지금 + 10초'로 늘린다.
  *    (처리 중에 서버가 죽으면 10초 뒤 다른 서버가 대신 진행한다)
- * 2. 상태 저장 → start / startBot / cancel: 리스를 풀고 다음 마감시간을 기록한다. (게임이 끝났으면 지운다)
+ * 2. 상태 저장 → saveAndSchedule: 상태 저장, 리스 해제, 다음 마감시간 기록을 한 번에(Redis Lua 하나로) 한다. (게임이 끝났으면 타이머를 지운다)
+ *    그 사이 리스를 다른 서버가 가져갔으면 상태도 저장하지 않는다.
  * 3. 중간에 예외가 나면 releaseHeld: 리스를 풀고 마감시간을 원래대로 되돌린다.
  * 잡은 리스는 요청을 처리하는 스레드의 ThreadLocal에 들고 있다가 2나 3에서 놓는다.
  *
@@ -41,7 +44,7 @@ public class TimerService {
     }
 
     /** 시간 초과가 난(AFK) 사람은 제한 시간 대신 이 시간만 기다린 뒤 바로 대신 진행한다. */
-    static final int AFK_DELAY_SECONDS = 3;
+    static final int AFK_DELAY_SECONDS = 6;
 
     /** 요청을 처리하는 동안 늘려 두는 마감시간. 처리 중에 서버가 죽으면 이 시간 뒤에 대신 진행된다. */
     static final long DEFAULT_LEASE_MILLIS = 10_000;
@@ -85,15 +88,46 @@ public class TimerService {
         workers.shutdownNow();
     }
 
-    // ===== 마감시간 기록 (상태를 저장한 뒤 GameService가 부른다) =====
+    // ===== 상태 저장과 마감시간 기록 (GameService가 부른다) =====
 
-    /** 사람 차례의 마감시간을 기록한다. AFK인 사람은 제한 시간 대신 짧게 기다린다. (turnNumber, phase는 기록하지 않는다: 대신 진행은 그때 저장된 상태를 본다) */
+    /**
+     * 게임 상태를 저장하면서, 같은 단위로 이 스레드가 잡은 리스를 풀고 다음 요청 수신 마감시간을 기록한다.
+     * 다음 마감: 게임이 끝났으면 타이머 삭제, 봇 차례면 botDelaySeconds, AFK인 사람이면 AFK_DELAY_SECONDS, 아니면 제한 시간.
+     * @return 저장했으면 true. 리스를 다른 쪽이 가져갔으면 아무것도 저장하지 않고 false.
+     */
+    public boolean saveAndSchedule(GameState state, int botDelaySeconds) {
+        String roomId = state.getRoomId();
+        Lease held = HELD.get();
+        String token = held != null && held.roomId().equals(roomId) ? held.token() : null;
+        long delayMillis = state.isGameOver() ? -1 : nextWaitSeconds(state, botDelaySeconds) * 1000L;
+
+        boolean saved = repository.saveAndSchedule(state, delayMillis, token);
+        clearHeld(roomId);
+        if (!saved) {
+            // 처리하는 데 리스 시간보다 오래 걸려서 그 사이 다른 서버가 대신 진행을 시작했다. 그쪽 결과를 덮어쓰지 않는다.
+            log.warn("리스를 잃어 상태를 저장하지 않았습니다. roomId={}", roomId);
+        }
+        return saved;
+    }
+
+    private int nextWaitSeconds(GameState state, int botDelaySeconds) {
+        PlayerState current = state.currentPlayer();
+        if (current.isBot()) {
+            return botDelaySeconds;
+        }
+        return repository.isAfk(state.getRoomId(), current.getPlayerId())
+                ? AFK_DELAY_SECONDS : state.getConfig().limitTimeSeconds();
+    }
+
+    // ===== 마감시간만 기록 (상태 저장 없이) =====
+
+    /** 사람 차례의 마감시간만 기록한다. AFK인 사람은 제한 시간 대신 짧게 기다린다. (turnNumber, phase는 기록하지 않는다: 대신 진행은 그때 저장된 상태를 본다) */
     public void start(String roomId, long playerId, int turnNumber, TurnPhase phase, int limitSeconds) {
         int seconds = repository.isAfk(roomId, playerId) ? AFK_DELAY_SECONDS : limitSeconds;
         schedule(roomId, seconds);
     }
 
-    /** 봇 차례의 마감시간을 기록한다. 봇은 항상 delaySeconds 뒤에 대신 진행한다. */
+    /** 봇 차례의 마감시간만 기록한다. 봇은 항상 delaySeconds 뒤에 대신 진행한다. */
     public void startBot(String roomId, long playerId, int turnNumber, TurnPhase phase, int delaySeconds) {
         schedule(roomId, delaySeconds);
     }
@@ -148,7 +182,7 @@ public class TimerService {
 
     /**
      * 요청 처리가 끝났다. 마감시간을 새로 기록하지 못한 채(예외) 끝났으면 리스를 풀고 마감시간을 원래대로 되돌린다.
-     * 정상으로 끝났으면 start/startBot/cancel이 이미 리스를 놓았으므로 아무것도 하지 않는다.
+     * 정상으로 끝났으면 saveAndSchedule이 이미 리스를 놓았으므로 아무것도 하지 않는다.
      * 대신 진행이 실패한 경우는 되돌리지 않는다. 리스 시간이 지나면 다시 대신 진행을 시도한다. (바로 되돌리면 실패를 계속 반복한다)
      */
     public void releaseHeld() {

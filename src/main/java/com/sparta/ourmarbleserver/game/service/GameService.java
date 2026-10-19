@@ -56,7 +56,7 @@ public class GameService {
     /**
      * 봇 차례는 사람처럼 제한 시간을 기다리지 않고 이 시간(초) 뒤에 바로 진행한다.
      */
-    private static final int BOT_DELAY_SECONDS = 3;
+    private static final int BOT_DELAY_SECONDS = 6;
 
     /**
      * 게임 종료 이벤트를 내보내는 곳. 이 서비스가 상태를 지우고, 로비가 방을 WAITING으로 되돌린다.
@@ -73,7 +73,8 @@ public class GameService {
 
     /**
      * 타이머. 요청을 검증할 때(validate) 마감시간 전인지 확인하고 리스를 잡으며,
-     * 상태를 저장하는 때마다(startGame, save) 그 방의 다음 요청 수신 마감시간을 새로 기록하고, 게임이 끝나면 지운다.
+     * 상태를 저장하는 때마다(startGame, save) 상태와 그 방의 다음 요청 수신 마감시간을 한 번에 기록하고, 게임이 끝나면 타이머를 지운다.
+     * 타이머가 있으면 상태는 타이머의 저장소가 저장한다. (서버에서는 RedisTimerRepository가 RedisGameStateRepository와 같은 Redis에 쓴다)
      * 생성자에 넣으면 테스트의 new GameService(...)가 모두 바뀌어서 setter로 받는다. 테스트에서는 넣지 않으면 타이머 없이 동작한다.
      */
     private TimerService timerService;
@@ -138,8 +139,7 @@ public class GameService {
         }
 
         turnService.startTurn(state, playerIds.getFirst());
-        repository.save(state);
-        restartTimer(state);
+        persist(state);
         return state;
     }
 
@@ -367,38 +367,31 @@ public class GameService {
     // ===== 상태 저장과 게임 종료 =====
 
     /**
-     * 요청 처리의 마지막에 상태를 저장하고, 타이머를 새로 시작한다. (게임이 끝났으면 타이머를 지운다)
+     * 요청 처리의 마지막에 상태를 저장하고, 다음 요청 수신 마감시간을 기록한다. (게임이 끝났으면 타이머를 지운다)
      * 게임이 끝났으면 생존자의 최종 등수를 정하고 종료 이벤트를 한 번 내보낸다.
      * (등수가 아직 안 정해진 생존자가 있을 때만 정하므로, 이벤트도 한 번만 나간다)
      */
     private void save(GameState state) {
         boolean justEnded = state.isGameOver() && assignSurvivorRanks(state);
-        repository.save(state);
-        restartTimer(state);
+        persist(state);
         if (justEnded) {
             eventPublisher.publishEvent(GameEndedEvent.of(state));
         }
     }
 
     /**
-     * 상태가 저장된 시점에 다음 요청 수신 마감시간을 기록한다. (이 시점에 다음에 기다릴 phase가 정해져 있다)
-     * validate에서 잡은 리스도 여기서 놓는다. 게임이 끝났으면 타이머를 지운다. 타이머는 기록만 하고 이 서비스를 다시 부르지 않는다.
+     * 상태를 저장한다. 타이머가 있으면 상태 저장, validate에서 잡은 리스 해제, 다음 요청 수신 마감시간 기록
+     * (게임이 끝났으면 타이머 삭제)을 한 번에 한다. 그 사이 리스를 다른 서버가 가져갔으면(처리가 리스 시간보다 오래 걸림)
+     * 아무것도 저장되지 않았으므로 요청을 실패로 끝낸다. (그쪽의 대신 진행 결과가 남는다)
      */
-    private void restartTimer(GameState state) {
+    private void persist(GameState state) {
         if (timerService == null) {
+            repository.save(state);
             return;
         }
-        if (state.isGameOver()) {
-            timerService.cancel(state.getRoomId());
-            return;
+        if (!timerService.saveAndSchedule(state, BOT_DELAY_SECONDS)) {
+            throw new GameException(GameErrorCode.INVALID_STATE);
         }
-        if (state.currentPlayer().isBot()) {
-            timerService.startBot(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
-                    state.getPhase(), BOT_DELAY_SECONDS);
-            return;
-        }
-        timerService.start(state.getRoomId(), state.getCurrentPlayerId(), state.getTurnNumber(),
-                state.getPhase(), state.getConfig().limitTimeSeconds());
     }
 
     /**
@@ -433,7 +426,7 @@ public class GameService {
     }
 
     /**
-     * 요청 처리 함수의 finally에서 부른다. 정상으로 끝났으면 save()의 restartTimer가 이미 리스를 놓아서 아무 일도 없다.
+     * 요청 처리 함수의 finally에서 부른다. 정상으로 끝났으면 save()의 persist가 이미 리스를 놓아서 아무 일도 없다.
      */
     private void releaseTimerLease() {
         if (timerService != null) {

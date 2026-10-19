@@ -100,10 +100,10 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         log.info("[WS] 종료: player={} session={} status={}", playerId, session.getId(), status);
         sessionRegistry.remove(playerId, session);
 
-        if (sessionRegistry.isConnected(playerId)) {
-            return;   // 중복 로그인으로 옛 연결만 끊긴 것: 새 연결이 살아 있으니 방은 그대로
-        }
         try {
+            if (sessionRegistry.isConnected(playerId)) {
+                return;   // 다른 연결(같은 서버의 새 연결 또는 다른 서버)이 살아 있으니 방은 그대로
+            }
             lobbyService.leaveWaitingRoom(playerId)   // 대기방이면 퇴장, 게임 중이면 그대로
                     .ifPresent(roomId -> sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId)));
                     // 해당 플레이어가 나가도 대기방이 남아있으면 방에 ROOM_UPDATED 브로드캐스트

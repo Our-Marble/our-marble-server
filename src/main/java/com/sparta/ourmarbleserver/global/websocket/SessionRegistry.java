@@ -1,22 +1,27 @@
 package com.sparta.ourmarbleserver.global.websocket;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /*
 * 한 플레이어는 하나의 연결만 가짐
-* 같은 playerId로 재접속 시 이전 연결 끊고 새 연결로 교체
+* 같은 playerId로 재접속 시 이전 연결 끊고 새 연결로 교체 (같은 서버면 직접, 다른 서버면 그 서버에 요청)
 */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SessionRegistry {
     // 전송 제한 시간(ms). 상대가 이 시간 안에 못 받으면 연결을 끊는다.
     private static final int SEND_TIME_LIMIT = 10_000;
@@ -26,6 +31,13 @@ public class SessionRegistry {
 
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
 
+    // 이 서버의 연결들을 Redis 접속 기록에 연장하는 주기 (TTL 60초보다 충분히 짧게)
+    private static final long PRESENCE_REFRESH_MILLIS = 20_000;
+
+    private final PresenceRepository presence;
+    private final ServerInstance server;
+    private final SessionKickPublisher kickPublisher;
+
     // 연결 등록
     public WebSocketSession register(long playerId, WebSocketSession session) {
         // 1. Decorator로 감싸기
@@ -34,6 +46,8 @@ public class SessionRegistry {
 
         // 2. put → previous 받기
         WebSocketSession previous = sessions.put(playerId, decorated);
+        String previousToken = presence.markOnline(playerId, tokenOf(session));   // 어느 서버에서든 "접속 중"으로 보이게
+        kickOnOtherServer(playerId, previousToken);                              // 다른 서버에 옛 연결이 있으면 끊어 달라고 요청
         log.info("[WS] 등록: player={} session={}", playerId, session.getId());
 
         // 3. previous 있으면 DUPLICATE_LOGIN으로 close (try-catch)
@@ -61,6 +75,13 @@ public class SessionRegistry {
             }
             return current;    // 다른 연결(새 연결)이면 그대로 둔다
         });
+
+        // 기록이 이 연결의 것일 때만 지워진다 (같은 서버 재접속이나 다른 서버 재접속이면 새 기록이 남는다)
+        try {
+            presence.markOffline(playerId, tokenOf(session));
+        } catch (RuntimeException e) {
+            log.warn("[WS] 접속 기록 삭제 실패: player={} {}", playerId, e.getMessage());   // TTL로 결국 사라진다
+        }
     }
 
     // 한 명에게 보내기
@@ -78,13 +99,81 @@ public class SessionRegistry {
         }
     }
 
+    // 어느 서버에든 접속 중인가 (Redis 접속 기록 기준)
     public boolean isConnected(long playerId) {
-        WebSocketSession session = sessions.get(playerId);
-        return session != null && session.isOpen();
+        return presence.isOnline(playerId);
     }
 
-    // 이 서버에 접속 중인 playerId 목록 (복사본). 로비 전체 전송 대상을 고를 때 사용
+    // "이 서버"에 연결된 playerId 목록 (복사본). 실제로 메시지를 보낼 대상이라 로컬 기준이다.
     public Set<Long> connectedPlayerIds() {
         return Set.copyOf(sessions.keySet());
+    }
+
+    // 이 서버의 연결들의 접속 기록 만료 시간을 연장한다. 서버가 죽으면 연장이 멈춰 TTL 뒤에 기록이 사라진다.
+    // 이전 기록이 다른 서버의 연결이면, 그 서버에게 끊어 달라고 요청한다.
+    // 같은 서버의 이전 연결은 register에서 sessions.put의 이전 값으로 직접 끊는다.
+    private void kickOnOtherServer(long playerId, String previousToken) {
+        if (previousToken == null) {
+            return;
+        }
+        int separator = previousToken.indexOf(':');
+        String serverId = previousToken.substring(0, separator);
+        if (serverId.equals(server.id())) {
+            return;
+        }
+        String sessionId = previousToken.substring(separator + 1);
+        log.info("[WS] 다른 서버 중복 접속: player={} 옛 연결={} 종료 요청", playerId, previousToken);
+        try {
+            kickPublisher.kick(serverId, playerId, sessionId);
+        } catch (RuntimeException e) {
+            log.warn("[WS] 다른 서버에 종료 요청 실패: player={} {}", playerId, e.getMessage());
+        }
+    }
+
+    // 다른 서버에 같은 계정이 새로 접속했다는 요청. 이 서버의 그 연결이 아직 요청받은 그 연결일 때만 끊는다.
+    // (요청이 오는 사이 이 서버에서 또 재접속했다면 세션 id가 달라서 새 연결은 건드리지 않는다)
+    public void closeDuplicate(long playerId, String sessionId) {
+        WebSocketSession current = sessions.get(playerId);
+        if (current == null || !current.isOpen() || !current.getId().equals(sessionId)) {
+            return;
+        }
+        log.info("[WS] 다른 서버 접속으로 옛 연결 종료: player={} session={}", playerId, sessionId);
+        try {
+            current.close(SessionCloseCodes.DUPLICATE_LOGIN);
+        } catch (IOException e) {
+            log.warn("[WS] 옛 연결 종료 실패: player={} {}", playerId, e.getMessage());
+        }
+    }
+
+    @Scheduled(fixedDelay = PRESENCE_REFRESH_MILLIS)
+    public void refreshPresence() {
+        Map<Long, String> tokens = new HashMap<>();
+        sessions.forEach((playerId, session) -> {
+            if (session.isOpen()) {
+                tokens.put(playerId, tokenOf(session));
+            }
+        });
+        try {
+            presence.refresh(tokens);
+        } catch (RuntimeException e) {
+            log.warn("[WS] 접속 기록 연장 실패: {}", e.getMessage());
+        }
+    }
+
+    // "서버id:세션id". 감싼 세션(Decorator)과 원래 세션의 getId()는 같다.
+    private String tokenOf(WebSocketSession session) {
+        return server.id() + ":" + session.getId();
+    }
+
+    // 이 서버의 연결을 모두 닫는다. 정상 종료 시 WebSocketShutdown이 Tomcat보다 먼저 부른다.
+    // 닫히면서 afterConnectionClosed가 접속 기록 삭제와 대기방 정리를 마칠 수 있다. (클라는 1012를 받으면 재접속)
+    public void closeAll() {
+        sessions.forEach((playerId, session) -> {
+            try {
+                session.close(CloseStatus.SERVICE_RESTARTED);
+            } catch (IOException | RuntimeException e) {
+                log.warn("[WS] 종료 중 연결 닫기 실패: player={} {}", playerId, e.getMessage());
+            }
+        });
     }
 }

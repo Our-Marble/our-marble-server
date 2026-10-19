@@ -76,7 +76,7 @@ class GameConfigTest {
         GameConfig config = new GameConfig(1_000_000, 20_000, 50_000, 10, 2, 3);
 
         assertThat(config.limitTimeSeconds()).isEqualTo(GameConfig.DEFAULT_LIMIT_TIME_SECONDS);
-        assertThat(GameConfig.defaults().limitTimeSeconds()).isEqualTo(20);
+        assertThat(GameConfig.defaults().limitTimeSeconds()).isEqualTo(60);
     }
 
     @Test

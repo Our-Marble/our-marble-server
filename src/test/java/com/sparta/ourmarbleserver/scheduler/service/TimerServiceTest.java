@@ -1,5 +1,9 @@
 package com.sparta.ourmarbleserver.scheduler.service;
 
+import com.sparta.ourmarbleserver.game.state.GameState;
+import com.sparta.ourmarbleserver.game.state.GameStateRepository;
+import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
+import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.scheduler.repository.InMemoryTimerRepository;
 import com.sparta.ourmarbleserver.scheduler.repository.TimerRepository;
@@ -209,8 +213,8 @@ class TimerServiceTest {
 
         assertThat(waitTimeout(4500)).isEqualTo("r1");   // 첫 입력은 제한 시간(4초)
         assertThat(timer.isAfk("r1", 1L)).isTrue();
-        assertThat(waitTimeout(2500)).isNull();          // AFK 대기 3초가 지나기 전
-        assertThat(waitTimeout(1000)).isEqualTo("r1");   // 다음은 3초 만에
+        assertThat(waitTimeout(5500)).isNull();          // AFK 대기 6초가 지나기 전
+        assertThat(waitTimeout(1000)).isEqualTo("r1");   // 다음은 6초 만에
     }
 
     @Test
@@ -264,5 +268,77 @@ class TimerServiceTest {
         timer.cancel("r1");
 
         assertThat(timer.isAfk("r1", 1L)).isFalse();
+    }
+
+    // ===== 상태 저장과 마감시간 기록을 한 번에 =====
+
+    /** 사람 1번의 차례인 방 상태 */
+    private static GameState stateOf(String roomId, int turnNumber) {
+        GameState state = new GameState(roomId);
+        state.addPlayer(new PlayerState(1L));
+        state.setPlayerOrder(java.util.List.of(1L));
+        state.setCurrentPlayerId(1L);
+        state.setTurnNumber(turnNumber);
+        return state;
+    }
+
+    @Test
+    void 상태를_저장하면서_다음_마감시간을_기록한다() throws Exception {
+        GameStateRepository states = new InMemoryGameStateRepository();
+        TimerService service = new TimerService(new InMemoryTimerRepository(states), LEASE_MILLIS);
+        BlockingQueue<String> fired = new LinkedBlockingQueue<>();
+        service.setHandler(fired::add);
+        try {
+            GameState state = stateOf("r1", 1);
+            state.setConfig(state.getConfig().withLimitTimeSeconds(1));
+
+            assertThat(service.saveAndSchedule(state, 6)).isTrue();
+
+            assertThat(states.findById("r1").isPresent()).isTrue();
+            assertThat(fired.poll(1500, TimeUnit.MILLISECONDS)).isEqualTo("r1");   // 제한 시간(1초) 뒤
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void 리스를_다른_쪽이_가져갔으면_상태도_마감시간도_쓰지_않는다() throws Exception {
+        GameStateRepository states = new InMemoryGameStateRepository();
+        InMemoryTimerRepository repo = new InMemoryTimerRepository(states);
+        TimerService service = new TimerService(repo, 300);   // 리스 0.3초
+        try {
+            service.saveAndSchedule(stateOf("r1", 1), 6);          // 게임 시작
+            assertThat(service.tryAcquire("r1", 1L, false)).isTrue();   // 요청 처리 시작
+            Thread.sleep(400);                                      // 처리가 리스 시간보다 오래 걸렸다
+            assertThat(repo.claimExpired("r1", "other-server", 10_000)).isTrue();   // 다른 서버가 대신 진행을 시작
+
+            assertThat(service.saveAndSchedule(stateOf("r1", 2), 6)).isFalse();
+
+            assertThat(states.findById("r1").orElseThrow().getTurnNumber()).isEqualTo(1);   // 덮어쓰지 않았다
+        } finally {
+            service.shutdown();
+        }
+    }
+
+    @Test
+    void 게임이_끝난_상태를_저장하면_타이머가_지워진다() throws Exception {
+        GameStateRepository states = new InMemoryGameStateRepository();
+        TimerService service = new TimerService(new InMemoryTimerRepository(states), LEASE_MILLIS);
+        BlockingQueue<String> fired = new LinkedBlockingQueue<>();
+        service.setHandler(fired::add);
+        try {
+            GameState state = stateOf("r1", 1);
+            state.setConfig(state.getConfig().withLimitTimeSeconds(1));
+            service.saveAndSchedule(state, 6);
+            states.findById("r1").orElseThrow();
+
+            GameState ended = stateOf("r1", 2);
+            ended.setGameOver(true);
+            assertThat(service.saveAndSchedule(ended, 6)).isTrue();
+
+            assertThat(fired.poll(1500, TimeUnit.MILLISECONDS)).isNull();
+        } finally {
+            service.shutdown();
+        }
     }
 }

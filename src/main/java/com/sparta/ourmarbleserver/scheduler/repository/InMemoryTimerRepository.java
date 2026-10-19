@@ -1,12 +1,26 @@
 package com.sparta.ourmarbleserver.scheduler.repository;
 
+import com.sparta.ourmarbleserver.game.state.GameState;
+import com.sparta.ourmarbleserver.game.state.GameStateRepository;
+
 import java.util.*;
 
 /**
  * 서버 메모리에 마감시간을 보관하는 구현. (테스트용, 서버 한 대에서만 맞다)
  * RedisTimerRepository의 Lua 스크립트와 같은 규칙을 synchronized로 지킨다.
+ * saveAndSchedule은 생성자로 받은 게임 상태 저장소에 상태를 저장한다. (받지 않았으면 타이머만 기록한다)
  */
 public class InMemoryTimerRepository implements TimerRepository {
+
+    private final GameStateRepository states;
+
+    public InMemoryTimerRepository() {
+        this(null);
+    }
+
+    public InMemoryTimerRepository(GameStateRepository states) {
+        this.states = states;
+    }
 
     private record Lease(String token, long expiresAt) {
     }
@@ -55,6 +69,29 @@ public class InMemoryTimerRepository implements TimerRepository {
         }
         leases.remove(roomId);
         deadlines.put(roomId, now + delayMillis);
+        return true;
+    }
+
+    @Override
+    public synchronized boolean saveAndSchedule(GameState state, long delayMillis, String token) {
+        String roomId = state.getRoomId();
+        long now = now();
+        if (token != null) {
+            Lease current = activeLease(roomId, now);
+            if (current != null && !current.token().equals(token)) {
+                return false;
+            }
+        }
+        if (states != null) {
+            states.save(state);
+        }
+        leases.remove(roomId);
+        if (delayMillis < 0) {
+            deadlines.remove(roomId);
+            afkPlayers.remove(roomId);
+        } else {
+            deadlines.put(roomId, now + delayMillis);
+        }
         return true;
     }
 

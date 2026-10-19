@@ -1,0 +1,95 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Actions 탭에서 수동 실행도 가능
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false # 배포 도중 끊기지 않도록 순서대로 실행
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (캐시)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build jar
+        run: |
+          chmod +x gradlew
+          ./gradlew bootJar --no-daemon
+          cp "$(ls build/libs/*.jar | grep -v plain | head -n 1)" app.jar
+
+      - name: Set up SSH
+        env:
+          EC2_HOSTS: ${{ secrets.EC2_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          for host in $(echo "$EC2_HOSTS" | tr ',' ' '); do
+            ssh-keyscan -H "$host" >> ~/.ssh/known_hosts
+          done
+
+      # 서버를 한 대씩 차례로 배포 (롤링 배포)
+      # 한 대가 재시작하는 동안 나머지 서버가 ALB 트래픽을 받는다.
+      # 한 대라도 실패하면 그 서버는 이전 버전으로 롤백하고, 다음 서버는 배포하지 않는다.
+      - name: Rolling deploy
+        env:
+          EC2_HOSTS: ${{ secrets.EC2_HOSTS }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          set -e
+          for host in $(echo "$EC2_HOSTS" | tr ',' ' '); do
+            echo "=============================="
+            echo "🚀 $host 배포 시작"
+            echo "=============================="
+
+            scp -i ~/.ssh/ec2.pem app.jar "$EC2_USER@$host:~/app/app.jar.new"
+
+            ssh -i ~/.ssh/ec2.pem "$EC2_USER@$host" 'bash -s' <<'REMOTE'
+          set -e
+          cd ~/app
+          [ -f app.jar ] && mv app.jar app.jar.bak
+          mv app.jar.new app.jar
+          sudo systemctl restart our-marble
+
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:8080/actuator/health | grep -q '"UP"'; then
+              echo "✅ 서버 기동 성공"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "❌ 헬스체크 실패 - 이전 버전으로 롤백"
+          sudo journalctl -u our-marble -n 50 --no-pager || true
+          if [ -f app.jar.bak ]; then
+            mv app.jar.bak app.jar
+            sudo systemctl restart our-marble
+          fi
+          exit 1
+          REMOTE
+
+            # ALB가 이 서버를 다시 healthy로 판정할 때까지 기다린 뒤 다음 서버로 넘어간다
+            echo "⏳ ALB 헬스체크 반영 대기 (30초)"
+            sleep 30
+          done
+          echo "🎉 전체 서버 배포 완료"
+
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/ec2.pem
