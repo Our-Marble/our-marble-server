@@ -19,13 +19,16 @@ import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.tags.Tag;
 
 /**
- * Redoc 맨 위의 "한눈에 보기" 구간을 만든다. 접속과 메시지 형식 두 문단, 분류별로 요청과 알림 type을 모은 짧은 표로 이루어진다.
+ * Redoc 맨 위의 문서 제목·버전과 "한눈에 보기" 구간을 만든다. 접속과 메시지 형식 두 문단, 분류별로 요청과 알림 type을 모은 짧은 표로 이루어진다.
  * 표는 서버가 뜰 때 문서 데이터(/docs/ 주소)에서 자동으로 만들어서, 메시지를 추가하면 표에도 저절로 들어간다.
  * 분류 순서는 DocOrderConfig가 정렬한 tags를 따르므로, 그 정렬이 끝난 뒤에 불러야 한다.
  */
 final class DocOverview {
 
     private static final String TITLE = "# 한눈에 보기";
+    /** Redoc 맨 위에 나오는 문서 제목과 버전. 정하지 않으면 springdoc 기본값("OpenAPI definition", "v0")이 나온다. */
+    private static final String API_TITLE = "우리의 마블 서버 API";
+    private static final String API_VERSION = "1.0.0";
     /** 200 응답 설명에서 "**ROOM_ENTERED** — …"처럼 굵게 적힌 알림 이름을 찾는다. */
     private static final Pattern RESULT = Pattern.compile("\\*\\*([A-Z][A-Z_]+)\\*\\*");
 
@@ -51,6 +54,8 @@ final class DocOverview {
             info = new Info();
             openApi.setInfo(info);
         }
+        info.setTitle(API_TITLE);
+        info.setVersion(API_VERSION);
         String current = info.getDescription();
         if (current != null && current.contains(TITLE)) {
             return;
