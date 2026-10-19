@@ -23,8 +23,9 @@ import java.util.*;
  * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(LobbyMessageHandler)이 이 클래스의 메서드만 호출한다.
  * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
  * 규칙에 어긋난 요청은 GameException(LobbyErrorCode.*)을 던지고, 전송 계층이 LOBBY_ERROR로 바꿔 보낸다.
- * 한 서버 안의 동시 요청은 synchronized로, 서버 사이의 동시 수정은 방 락(RoomLock)으로 막는다.
- * 방을 바꾸는 메서드는 그 방의 락 안에서 "읽고 → 검증 → 저장"한다.
+ * 방을 바꾸는 메서드는 그 방의 락(RoomLock) 안에서 "읽고 → 검증 → 저장"한다. 같은 서버 안이든 서버 사이든 이 락이 막는다.
+ * 서비스 전체를 synchronized로 잠그지 않는다. (잠그면 방이 달라도 모든 요청이 한 줄로 서고, 락 대기와 DB·Redis 조회가 그 줄을 막는다)
+ * 읽기만 하는 메서드는 락 없이 읽는다. (방은 읽을 때마다 새로 만든 복사본이다)
  * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 방을 대기(WAITING) 상태로 되돌린다.
  * 멤버는 그대로 두고 방장이 아닌 사람의 준비는 푼다.
  * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
@@ -46,7 +47,7 @@ public class LobbyService {
      * 방을 만든다. 인원수는 게임 최대 인원(GameConfig.MAX_PLAYERS), 맵은 기본 맵(GameConfig.DEFAULT_MAP_ID)으로 정한다.
      * (CREATE_ROOM 요청에는 본문이 없다)
      */
-    public synchronized RoomInfo createRoom(long playerId) {
+    public RoomInfo createRoom(long playerId) {
         return createRoom(playerId, GameConfig.DEFAULT_MAP_ID, GameConfig.MAX_PLAYERS);
     }
 
@@ -55,7 +56,7 @@ public class LobbyService {
      * maxPlayers가 2~4가 아니면 INVALID_STATE, 이미 어떤 방에든(시작한 방 포함) 있으면 ALREADY_IN_ROOM.
      * mapId는 검증하지 않는다. (맵 목록이 서버에 없다)
      */
-    public synchronized RoomInfo createRoom(long playerId, int mapId, int maxPlayers) {
+    public RoomInfo createRoom(long playerId, int mapId, int maxPlayers) {
         if (maxPlayers < GameConfig.MIN_PLAYERS || maxPlayers > GameConfig.MAX_PLAYERS) {
             throw new GameException(LobbyErrorCode.INVALID_STATE);
         }
@@ -69,7 +70,7 @@ public class LobbyService {
     }
 
     /** 대기 중(WAITING)인 방 목록 */
-    public synchronized List<RoomInfo> listRooms() {
+    public List<RoomInfo> listRooms() {
         return repository.findAll().stream()
                 .filter(room -> room.getStatus() == RoomStatus.WAITING)
                 .map(this::toInfo)
@@ -77,7 +78,7 @@ public class LobbyService {
     }
 
     /** ROOM_LIST 알림 내용. 대기 중(WAITING)인 방만 담는다. */
-    public synchronized RoomListPayload roomList() {
+    public RoomListPayload roomList() {
         List<RoomListPayload.RoomSummary> rooms = repository.findAll().stream()
                 .filter(room -> room.getStatus() == RoomStatus.WAITING)
                 .map(room -> new RoomListPayload.RoomSummary(
@@ -87,7 +88,7 @@ public class LobbyService {
     }
 
     /** 방 한 개 조회. 없으면 ROOM_NOT_FOUND. */
-    public synchronized RoomInfo getRoom(String roomId) {
+    public RoomInfo getRoom(String roomId) {
         return toInfo(findRoom(roomId));
     }
 
@@ -96,13 +97,13 @@ public class LobbyService {
      * 요청에는 roomId가 실리지 않아서(LEAVE_ROOM, SET_READY, START_GAME) 요청한 사람의 방을 이걸로 찾는다.
      * 한 플레이어는 방 하나에만 들어갈 수 있다. (시작한 방 포함)
      */
-    public synchronized String roomIdOf(long playerId) {
+    public String roomIdOf(long playerId) {
         return repository.findRoomIdByPlayerId(playerId)
                 .orElseThrow(() -> new GameException(LobbyErrorCode.NOT_IN_ROOM));
     }
 
     /** 게임 중(PLAYING)인 방에 있으면 그 방 id. 재접속 시 게임 화면으로 돌려보낼 때 쓴다. */
-    public synchronized Optional<String> playingRoomIdOf(long playerId) {
+    public Optional<String> playingRoomIdOf(long playerId) {
         return repository.findRoomIdByPlayerId(playerId)
                 .flatMap(repository::findById)
                 .filter(room -> room.getStatus() == RoomStatus.PLAYING)
@@ -120,7 +121,7 @@ public class LobbyService {
     }
 
     /** 이 플레이어가 들어 있는 방. 어느 방에도 없으면 NOT_IN_ROOM. */
-    public synchronized RoomInfo findRoomByPlayer(long playerId) {
+    public RoomInfo findRoomByPlayer(long playerId) {
         return toInfo(findRoom(roomIdOf(playerId)));
     }
 
@@ -130,7 +131,8 @@ public class LobbyService {
      * 참가. 없는 방 ROOM_NOT_FOUND → 시작한 방 ROOM_ALREADY_STARTED
      * → 이미 어떤 방에 있음(시작한 방 포함) ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
      */
-    public synchronized RoomInfo join(String roomId, long playerId) {
+    public RoomInfo join(String roomId, long playerId) {
+        String nickname = nicknameOf(playerId); // DB 조회는 방 락을 잡기 전에 한다. (락을 쥔 채로 DB를 기다리지 않게)
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (room.getStatus() != RoomStatus.WAITING) {
@@ -142,7 +144,7 @@ public class LobbyService {
             }
 
             room.addMember(playerId, false);
-            room.setNickname(playerId, nicknameOf(playerId));
+            room.setNickname(playerId, nickname);
             repository.save(room);
             return toInfo(room);
         });
@@ -153,12 +155,12 @@ public class LobbyService {
      * 방장이 나가면 가장 먼저 참가한 사람이 방장이 되고, 마지막 사람이 나가면 방이 삭제된다.
      * 방이 남아 있으면 true, 마지막 사람이 나가 방이 삭제됐으면 false.
      */
-    public synchronized boolean leave(String roomId, long playerId) {
+    public boolean leave(String roomId, long playerId) {
         return roomLock.call(roomId, () -> leaveInLock(roomId, playerId));
     }
 
     /** 나가기 본체. 반드시 그 방의 락 안에서 부른다. (락 안에서 leave를 부르면 자기 락을 기다리게 된다) */
-    public synchronized boolean leaveInLock(String roomId, long playerId) {
+    public boolean leaveInLock(String roomId, long playerId) {
         Room room = findRoom(roomId);
         if (!room.hasMember(playerId)) {
             throw new GameException(LobbyErrorCode.NOT_IN_ROOM);
@@ -187,7 +189,7 @@ public class LobbyService {
      * ROOM_UPDATED 알림 내용을 만든다. 방 상태와 참가자 닉네임을 담는다. 없는 방이면 ROOM_NOT_FOUND.
      * 알림을 보내는 쪽이 입장, 퇴장, 준비, 방장 변경 뒤에 부른다.
      */
-    public synchronized RoomUpdatedPayload roomUpdated(String roomId) {
+    public RoomUpdatedPayload roomUpdated(String roomId) {
         Room room = findRoom(roomId);
         List<RoomUpdatedPayload.PlayerSnapshot> players = room.memberIds().stream()
                 .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id), BotService.isBotId(id)))
@@ -209,7 +211,7 @@ public class LobbyService {
      * → 봇 수가 음수이거나 사람 + 봇이 최대 인원을 넘음 INVALID_BOT_COUNT.
      * 실패하면 방은 그대로다.
      */
-    public synchronized RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers, int botCount) {
+    public RoomInfo setRoomConfig(String roomId, long playerId, GameConfig config, int maxPlayers, int botCount) {
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (room.getStatus() != RoomStatus.WAITING) {
@@ -264,7 +266,7 @@ public class LobbyService {
      * 준비 토글. 참가하지 않았으면 NOT_IN_ROOM, 시작한 방이면 ROOM_ALREADY_STARTED.
      * 방장은 항상 준비 상태라 바꾸려 하면 INVALID_STATE.
      */
-    public synchronized RoomInfo setReady(String roomId, long playerId, boolean ready) {
+    public RoomInfo setReady(String roomId, long playerId, boolean ready) {
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (!room.hasMember(playerId)) {
@@ -290,7 +292,7 @@ public class LobbyService {
      * 성공하면 참가 순서대로 gameService.startGame을 부르고, 그 뒤에 상태를 PLAYING으로 바꾼다.
      * (startGame이 실패하면 방은 WAITING으로 남는다)
      */
-    public synchronized RoomInfo start(String roomId, long playerId) {
+    public RoomInfo start(String roomId, long playerId) {
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (room.getStatus() != RoomStatus.WAITING) {
@@ -328,7 +330,7 @@ public class LobbyService {
      * 방을 지운다. 시작한 방(PLAYING)도 지운다.
      * 없는 방이면 ROOM_NOT_FOUND.
      */
-    public synchronized void deleteRoom(String roomId) {
+    public void deleteRoom(String roomId) {
         roomLock.run(roomId, () -> {
             findRoom(roomId);
             repository.deleteById(roomId);
@@ -342,7 +344,7 @@ public class LobbyService {
      */
     @EventListener
     @Order(1)   // 방을 WAITING 상태로 먼저 되돌리고 그 후 연결 끊긴 멤버 정리(@Order(2)) 실행
-    public synchronized void onGameEnded(GameEndedEvent event) {
+    public void onGameEnded(GameEndedEvent event) {
         try {
             roomLock.run(event.roomId(), () -> repository.findById(event.roomId()).ifPresent(room -> {
                 room.setStatus(RoomStatus.WAITING);
@@ -361,7 +363,7 @@ public class LobbyService {
      * 대기 중(WAITING)인 방에 있으면 내보낸다. 게임 중(PLAYING)이면 그대로 둔다.
      * 내보낸 뒤 방이 남아 있으면 그 방 id(남은 사람에게 ROOM_UPDATED를 보내야 함), 아니면 empty.
      */
-    public synchronized Optional<String> leaveWaitingRoom(long playerId) {
+    public Optional<String> leaveWaitingRoom(long playerId) {
         Optional<String> found = repository.findRoomIdByPlayerId(playerId);
         if (found.isEmpty()) {
             return Optional.empty();
@@ -378,14 +380,14 @@ public class LobbyService {
     }
 
     /** 방의 멤버 id 목록 (복사본). 방이 없으면 빈 목록. */
-    public synchronized List<Long> memberIdsOf(String roomId) {
+    public List<Long> memberIdsOf(String roomId) {
         return repository.findById(roomId)
                 .map(room -> List.copyOf(room.memberIds()))
                 .orElse(List.of());
     }
 
     /** 대기 중(WAITING)인 방 id 목록. 유령 멤버 청소에 쓴다. */
-    public synchronized List<String> waitingRoomIds() {
+    public List<String> waitingRoomIds() {
         return repository.findAll().stream()
                 .filter(room -> room.getStatus() == RoomStatus.WAITING)
                 .map(Room::getRoomId)
@@ -397,7 +399,7 @@ public class LobbyService {
      * 이미 나간 사람이나 대기 중이 아닌 방은 건너뛴다. (확인과 정리 사이에 다른 서버가 방을 바꿨을 수 있다)
      * 방장이 나가면 방장이 넘어가고, 모두 나가면 방이 삭제된다. 방이 남아 있으면 true.
      */
-    public synchronized boolean removeMembers(String roomId, Collection<Long> playerIds) {
+    public boolean removeMembers(String roomId, Collection<Long> playerIds) {
         return roomLock.call(roomId, () -> {
             for (long playerId : playerIds) {
                 Optional<Room> room = repository.findById(roomId);
