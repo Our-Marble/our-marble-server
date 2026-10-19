@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 황금열쇠(DRAW_CARD) 테스트. 카드 효과의 값(금액, 이동 칸 수 등)은 cards.json에서 읽어서 쓰므로 값이 바뀌어도 깨지지 않는다.
- * 카드 id: 0 무인도(GoToInspection) / 1 돈 받기(Bonus) / 2 패널티(Penalty) / 3 본사 이동(MoveTo) / 4 칸 이동(MoveBy) / 5 3칸 앞으로(MoveBy)
+ * 카드 id: 0 GoToInspection / 1 Bonus / 2 Penalty / 3 MoveTo / 4 MoveBy(3칸 뒤로) / 5 MoveBy(3칸 앞으로)
  * 플레이어 1이 2번 칸(황금열쇠)에서 카드를 뽑는 상태에서 시작한다.
  */
 class GameServiceCardTest {
