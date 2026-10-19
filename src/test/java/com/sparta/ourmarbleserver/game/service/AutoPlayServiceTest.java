@@ -94,12 +94,12 @@ class AutoPlayServiceTest {
 
     @Test
     void 카드_대기면_카드를_뽑는다() {
-        GameState state = start(2);   // 카드 목록의 2번째(돈 받기 200)
+        GameState state = start(2);   // 카드 목록의 2번째(돈 받기 100_000)
         waitAt(state, 2, TurnPhase.AWAITING_DRAW_CARD);
 
         autoPlay.onTimeout(ROOM);
 
-        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(500_000 + 200);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(500_000 + 100_000);
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.CARD_DRAWN), any());
     }
 

@@ -23,12 +23,9 @@ import java.util.*;
  * 로비 도메인 서비스. 웹소켓 요청을 받는 쪽(LobbyMessageHandler)이 이 클래스의 메서드만 호출한다.
  * playerId는 접속할 때 확인된 값이 전송 계층에서 넘어온다.
  * 규칙에 어긋난 요청은 GameException(LobbyErrorCode.*)을 던지고, 전송 계층이 LOBBY_ERROR로 바꿔 보낸다.
- * 동시 수정은 방 락(RoomLock)으로만 막는다. 방 락은 Redis에 걸리므로 다른 서버뿐 아니라 같은 서버의 다른 스레드도 막는다.
- * 방을 바꾸는 메서드는 그 방의 락 안에서 "읽고 → 검증 → 저장"한다. 서로 다른 방의 요청은 동시에 처리된다.
- * 읽기 메서드는 락을 잡지 않는다. (저장 도중에 읽으면 잠깐 이전 상태가 보일 수 있지만, 바뀐 뒤 ROOM_UPDATED가 다시 간다)
- * 예전에는 모든 메서드에 synchronized를 붙여 서버 전체의 로비 요청이 한 줄로 처리됐다.
- * 부하테스트(1000명)에서 스레드 176개가 이 모니터 하나를 기다리는 병목이 확인되어 제거했다.
- * 락 안에서는 Redis 읽기/쓰기만 하고, DB 조회(닉네임)처럼 느린 일은 락을 잡기 전에 한다. (락 리스 5초 안에 끝내기 위해)
+ * 방을 바꾸는 메서드는 그 방의 락(RoomLock) 안에서 "읽고 → 검증 → 저장"한다. 같은 서버 안이든 서버 사이든 이 락이 막는다.
+ * 서비스 전체를 synchronized로 잠그지 않는다. (잠그면 방이 달라도 모든 요청이 한 줄로 서고, 락 대기와 DB·Redis 조회가 그 줄을 막는다)
+ * 읽기만 하는 메서드는 락 없이 읽는다. (방은 읽을 때마다 새로 만든 복사본이다)
  * 게임이 끝나면 게임 쪽이 GameEndedEvent를 내보내고, onGameEnded가 받아 방을 대기(WAITING) 상태로 되돌린다.
  * 멤버는 그대로 두고 방장이 아닌 사람의 준비는 푼다.
  * (GameService가 LobbyService를 직접 부르면 서로를 참조해서 서버가 뜨지 않으므로 이벤트로 받는다)
@@ -139,7 +136,8 @@ public class LobbyService {
      * → 이미 어떤 방에 있음(시작한 방 포함) ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
      */
     public RoomInfo join(String roomId, long playerId) {
-        String nickname = nicknameOf(playerId);   // DB 조회는 락 밖에서
+        String nickname = nicknameOf(playerId); // DB 조회는 방 락을 잡기 전에 한다. (락을 쥔 채로 DB를 기다리지 않게)
+
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
             if (room.getStatus() != RoomStatus.WAITING) {
