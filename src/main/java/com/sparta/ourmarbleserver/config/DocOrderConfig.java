@@ -79,6 +79,9 @@ public class DocOrderConfig {
                 }));
                 openApi.setTags(tags);
             }
+
+            // 정렬이 끝난 뒤에 "한눈에 보기" 구간을 만든다. (표가 위 순서를 따른다)
+            DocOverview.apply(openApi);
         };
     }
 }
