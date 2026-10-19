@@ -30,12 +30,12 @@ public class MessageRelay implements MessageListener
 
     public void publishToRoom(String roomId, String jsonMessage) {
         redisTemplate.convertAndSend(ROOM_CHANNEL_PREFIX + roomId, jsonMessage);
-        log.info("발행: room={} {}", roomId, jsonMessage);
+        log.debug("발행: room={} {}", roomId, jsonMessage);
     }
 
     public void publishToLobby(String jsonMessage) {
         redisTemplate.convertAndSend(LOBBY_CHANNEL, jsonMessage);
-        log.info("발행: lobby {}", jsonMessage);
+        log.debug("발행: lobby {}", jsonMessage);
     }
 
     @Override
@@ -44,14 +44,14 @@ public class MessageRelay implements MessageListener
         String jsonMessage = new String(message.getBody(), StandardCharsets.UTF_8);
 
         if (LOBBY_CHANNEL.equals(channel)) {
-            log.info("수신: lobby {}", jsonMessage);
+            log.debug("수신: lobby {}", jsonMessage);
             roomBroadcaster.broadcastLobbyJson(jsonMessage);
             return;
         }
 
         if (channel.startsWith(ROOM_CHANNEL_PREFIX)) {
             String roomId = channel.substring(ROOM_CHANNEL_PREFIX.length());
-            log.info("수신: room={} {}", roomId, jsonMessage);
+            log.debug("수신: room={} {}", roomId, jsonMessage);
             roomBroadcaster.broadcastJson(roomId, jsonMessage);
             return;
         }

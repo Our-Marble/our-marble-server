@@ -88,7 +88,7 @@ public class SessionRegistry {
     public void send(long playerId, String json) {
         WebSocketSession session = sessions.get(playerId);
         if (session == null || !session.isOpen()) {
-            log.info("[WS] 전송 생략(접속 안 함): player={}", playerId);
+            log.debug("[WS] 전송 생략(접속 안 함): player={}", playerId);
             return;
         }
         try {
