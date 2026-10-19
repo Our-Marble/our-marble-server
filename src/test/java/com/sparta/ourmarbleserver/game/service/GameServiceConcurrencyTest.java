@@ -7,6 +7,9 @@ import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.game.state.TurnPhase;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.property.service.PropertyService;
+import com.sparta.ourmarbleserver.scheduler.repository.InMemoryTimerRepository;
+import com.sparta.ourmarbleserver.scheduler.service.TimerService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -22,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 같은 요청이 동시에 여러 번 와도 한 번만 처리되는지 확인한다.
  * 잠금이 없으면 여러 요청이 검증을 동시에 통과해서 땅값이 여러 번 빠질 수 있다.
+ * 막는 것은 TimerService의 방 단위 리스다. (메모리 구현은 Redis Lua와 같은 규칙을 따른다. 실제 Redis 검증은 GameServiceRedisConcurrencyTest)
  */
 class GameServiceConcurrencyTest {
 
@@ -31,11 +35,22 @@ class GameServiceConcurrencyTest {
 
     private final GameStateRepository repository = new InMemoryGameStateRepository();
     private PropertyService propertyService;
+    private TimerService timerService;
+
+    @AfterEach
+    void tearDown() {
+        if (timerService != null) {
+            timerService.shutdown();
+        }
+    }
 
     private GameService newService() {
         GameDataService data = new GameDataService(JsonMapper.builder().build());
         propertyService = new PropertyService(data);
         GameService service = GameTestSupport.newGameService(repository, data);
+        // 서버와 같은 규칙(방 단위 리스)으로 막는지 확인한다. GameService에는 synchronized가 없다.
+        timerService = new TimerService(new InMemoryTimerRepository(repository));
+        service.setTimerService(timerService);
         service.startGame(ROOM, List.of(1L, 2L));
 
         GameState state = repository.findById(ROOM).orElseThrow();
@@ -61,7 +76,7 @@ class GameServiceConcurrencyTest {
                     service.purchaseProperty( 1L, PROPERTY_ID, true);
                     succeeded.incrementAndGet();
                 } catch (GameException e) {
-                    rejected.incrementAndGet();   // 이미 구매가 끝나 턴이 넘어간 뒤의 요청
+                    rejected.incrementAndGet();   // 다른 요청이 리스를 잡고 있거나, 이미 구매가 끝나 턴이 넘어간 뒤의 요청
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
