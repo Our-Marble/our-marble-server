@@ -16,10 +16,10 @@ package com.sparta.ourmarbleserver.game.state;
 public record GameConfig(long startMoney, long salaryAmount, long taxAmount, int maxRound, int islandTurns, int mapId,
                          int limitTimeSeconds) {
 
-    public static final long DEFAULT_START_MONEY = 500_000;
+    public static final long DEFAULT_START_MONEY = 1500_000;
     public static final long DEFAULT_SALARY_AMOUNT = 100_000;
     public static final long DEFAULT_TAX_AMOUNT = 100_000;
-    public static final int DEFAULT_MAX_ROUND = 30;
+    public static final int DEFAULT_MAX_ROUND = 20;
     public static final int DEFAULT_ISLAND_TURNS = 3;
     public static final int DEFAULT_MAP_ID = 1;
     public static final int DEFAULT_LIMIT_TIME_SECONDS = 60;

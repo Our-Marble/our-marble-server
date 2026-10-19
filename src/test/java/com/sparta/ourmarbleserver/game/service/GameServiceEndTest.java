@@ -172,6 +172,7 @@ class GameServiceEndTest {
         player(3L).setBankrupt(true);
         player(3L).setFinalRank(3);
         player(1L).setMoney(600_000);
+        player(2L).setMoney(500_000);
 
         service.purchaseProperty( 2L, 103, false);
 

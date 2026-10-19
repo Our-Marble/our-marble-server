@@ -12,10 +12,10 @@ class GameConfigTest {
     void 기본_설정은_지금_서버_값이다() {
         GameConfig config = GameConfig.defaults();
 
-        assertThat(config.startMoney()).isEqualTo(500_000);
+        assertThat(config.startMoney()).isEqualTo(1500_000);
         assertThat(config.salaryAmount()).isEqualTo(100_000);
         assertThat(config.taxAmount()).isEqualTo(100_000);
-        assertThat(config.maxRound()).isEqualTo(30);
+        assertThat(config.maxRound()).isEqualTo(20);
         assertThat(config.islandTurns()).isEqualTo(3);
     }
 
