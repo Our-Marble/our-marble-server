@@ -49,6 +49,16 @@
       "targetTileId": 0,
       "steps": -3,
       "penaltyToFestivalPool": false
+    },
+    {
+      "id": 5,
+      "name": "칸 이동",
+      "description": "3칸 앞으로 가라",
+      "effectType": "MoveBy",
+      "amount": 0,
+      "targetTileId": 0,
+      "steps": 3,
+      "penaltyToFestivalPool": false
     }
   ]
 }

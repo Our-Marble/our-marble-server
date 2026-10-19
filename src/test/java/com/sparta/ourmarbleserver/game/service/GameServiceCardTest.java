@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 황금열쇠(DRAW_CARD) 테스트. 카드 효과의 값(금액, 이동 칸 수 등)은 cards.json에서 읽어서 쓰므로 값이 바뀌어도 깨지지 않는다.
- * 카드 id: 0 무인도(GoToInspection) / 1 돈 받기(Bonus) / 2 패널티(Penalty) / 3 본사 이동(MoveTo) / 4 칸 이동(MoveBy)
+ * 카드 id: 0 무인도(GoToInspection) / 1 돈 받기(Bonus) / 2 패널티(Penalty) / 3 본사 이동(MoveTo) / 4 칸 이동(MoveBy) / 5 3칸 앞으로(MoveBy)
  * 플레이어 1이 2번 칸(황금열쇠)에서 카드를 뽑는 상태에서 시작한다.
  */
 class GameServiceCardTest {
@@ -135,6 +135,33 @@ class GameServiceCardTest {
         assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);
         assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
         assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void 앞으로_가는_이동_카드는_이동하고_도착_칸을_처리한다() {
+        GameService service = newService(faceOf(5));   // 3칸 앞으로
+        int expected = (KEY_TILE + card(5).steps()) % 32;   // 2 + 3 = 5번 칸 (땅 105, 빈 땅)
+
+        service.drawCard(1L);
+
+        assertThat(card(5).steps()).isPositive();
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(expected);
+        assertThat(state().getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY);   // 출발 지점을 지나지 않아 월급 없음
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
+        assertThat(state().getCurrentPlayerId()).isEqualTo(1L);
+    }
+
+    @Test
+    void 앞으로_가는_이동_카드로_출발_지점을_지나면_월급을_받는다() {
+        GameService service = newService(faceOf(5));
+        state().getPlayerState(1L).setPosition(30);   // 30 + 3 = 33 → 1번 칸 (땅 101, 빈 땅)
+
+        service.drawCard(1L);
+
+        assertThat(state().getPlayerState(1L).getPosition()).isEqualTo(1);
+        assertThat(state().getPlayerState(1L).getMoney())
+                .isEqualTo(GameService.START_MONEY + EconomyService.SALARY_AMOUNT);
+        assertThat(state().getPhase()).isEqualTo(TurnPhase.AWAITING_PURCHASE);
     }
 
     @Test
