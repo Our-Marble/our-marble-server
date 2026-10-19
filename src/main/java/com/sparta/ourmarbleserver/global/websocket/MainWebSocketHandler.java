@@ -79,7 +79,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         long playerId = playerIdOf(session);
         try {
             InboundMessage inbound = codec.decode(message.getPayload());
-            log.info("[WS] 수신: player={} type={} body={}", playerId, inbound.type(), inbound.body());
+            log.debug("[WS] 수신: player={} type={} body={}", playerId, inbound.type(), inbound.body());
             router.route(playerId, inbound);
         } catch (GameException e) {
             log.info("[WS] 요청 거부: player={} code={} message={}", playerId, e.code(), message.getPayload());
