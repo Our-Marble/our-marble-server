@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,7 +30,9 @@ public class PlayerController {
     private final PlayerService playerService;
 
     @Operation(summary = "내 정보", description = "토큰의 주인(로그인한 나)의 회원 정보")
-    @ApiResponse(responseCode = "200", description = "성공")
+    @ApiResponse(responseCode = "200", description = "성공. 로그인한 나의 회원 정보(id, email, nickname)를 돌려준다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PlayerResponse.class),
+                    examples = @ExampleObject(name = "내 정보", value = "{\"id\": 1, \"email\": \"player@example.com\", \"nickname\": \"Alice\"}")))
     @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
     @GetMapping("/me")
     public ResponseEntity<PlayerResponse> me(
@@ -39,7 +42,9 @@ public class PlayerController {
     }
 
     @Operation(summary = "내 전적 조회", description = "닉네임, 플레이한 판 수, 이긴 판 수")
-    @ApiResponse(responseCode = "200", description = "성공")
+    @ApiResponse(responseCode = "200", description = "성공. 닉네임, 플레이한 판 수, 이긴 판 수를 돌려준다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PlayRecordResponse.class),
+                    examples = @ExampleObject(name = "내 전적", value = "{\"nickname\": \"Alice\", \"gamesPlayed\": 10, \"gamesWon\": 4}")))
     @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
     @GetMapping("/me/play-record")
     public ResponseEntity<PlayRecordResponse> playRecord(
@@ -49,7 +54,9 @@ public class PlayerController {
     }
 
     @Operation(summary = "내 전적 기록", description = "한 판을 마친 결과를 기록한다. 플레이한 판 수가 1 늘고, won이 true이면 이긴 판 수도 1 는다.")
-    @ApiResponse(responseCode = "200", description = "성공. 갱신된 전적을 돌려준다.")
+    @ApiResponse(responseCode = "200", description = "성공. 갱신된 전적을 돌려준다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PlayRecordResponse.class),
+                    examples = @ExampleObject(name = "이겼을 때 (won=true)", value = "{\"nickname\": \"Alice\", \"gamesPlayed\": 11, \"gamesWon\": 5}")))
     @ApiResponse(responseCode = "400", description = "won 값이 없음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthExceptionResponse.class)))
     @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
@@ -66,7 +73,9 @@ public class PlayerController {
     }
 
     @Operation(summary = "내 전적 초기화 (관리자 전용)", description = "판 수와 이긴 판 수를 0으로 되돌린다. ADMIN 권한이 있는 계정만 호출할 수 있다.")
-    @ApiResponse(responseCode = "200", description = "성공. 초기화된 전적을 돌려준다.")
+    @ApiResponse(responseCode = "200", description = "성공. 초기화된 전적을 돌려준다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = PlayRecordResponse.class),
+                    examples = @ExampleObject(name = "초기화된 전적", value = "{\"nickname\": \"Alice\", \"gamesPlayed\": 0, \"gamesWon\": 0}")))
     @ApiResponse(responseCode = "401", description = "토큰이 없거나, 틀렸거나, 만료됨 (본문 없음)")
     @ApiResponse(responseCode = "403", description = "ADMIN 권한이 아님 (본문 없음)")
     @PreAuthorize("hasRole('ADMIN')") //테스트용으로 하나 넣어 보았습니다
