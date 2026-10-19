@@ -18,8 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -69,12 +72,18 @@ class LobbyServiceTest {
 
     /** DB 없이 닉네임을 돌려주는 PlayerService. 1번 플레이어는 "닉1"이다. */
     private static class FakePlayerService extends PlayerService {
-        FakePlayerService() {
+        private final BooleanSupplier lockHeld;
+        /** 닉네임을 조회할 때마다 그 순간 방 락을 잡고 있었는지 기록한다. */
+        final List<Boolean> lockHeldDuringLookup = new ArrayList<>();
+
+        FakePlayerService(BooleanSupplier lockHeld) {
             super(null, null);
+            this.lockHeld = lockHeld;
         }
 
         @Override
         public PlayerResponse findMe(long userId) {
+            lockHeldDuringLookup.add(lockHeld.getAsBoolean());
             return new PlayerResponse(userId, "", "닉" + userId);
         }
     }
@@ -82,8 +91,9 @@ class LobbyServiceTest {
     private final RecordingGameService gameService = new RecordingGameService();
     private final InMemoryRoomRepository repository = new InMemoryRoomRepository();
     private final InMemoryRoomLock roomLock = new InMemoryRoomLock();
+    private final FakePlayerService playerService = new FakePlayerService(() -> roomLock.isHeld());
     private final LobbyService service =
-            new LobbyService(repository, gameService.mock, new FakePlayerService(), newBotService(), roomLock);
+            new LobbyService(repository, gameService.mock, playerService, newBotService(), roomLock);
 
     /** Redis INCR 대신 메모리 카운터로 번호를 주는 진짜 BotService. (-1, -2, ...) */
     @SuppressWarnings("unchecked")
@@ -959,7 +969,7 @@ class LobbyServiceTest {
                 .containsExactly(Tuple.tuple("닉1", false), Tuple.tuple("봇1", true));
     }
 
-    // ===== 서버 사이 동시 수정 (방 락) =====
+    // ===== 동시 수정 (방 락: 다른 서버, 같은 서버의 다른 스레드 모두) =====
 
     @Test
     void 방을_바꾸는_요청은_그_방의_락_안에서_처리한다() {
@@ -971,7 +981,8 @@ class LobbyServiceTest {
         service.setRoomConfig(id, HOST, NEW_CONFIG, 4, 0);
         service.start(id, HOST);
 
-        assertThat(roomLock.lockedRooms()).containsExactly(id, id, id, id);
+        // 방 만들기, 참가, 준비, 설정, 시작 (방 만들기도 저장을 그 방의 락 안에서 한다)
+        assertThat(roomLock.lockedRooms()).containsExactly(id, id, id, id, id);
     }
 
     @Test
@@ -1015,5 +1026,28 @@ class LobbyServiceTest {
         service.start(playing.roomId(), P3);
 
         assertThat(service.waitingRoomIds()).containsExactly(waiting.roomId());
+    }
+
+    // ===== 동시 처리: 서비스 전체를 잠그지 않는다 =====
+
+    @Test
+    void 로비_서비스의_메서드에는_synchronized를_붙이지_않는다() {
+        // 서비스 전체를 한 줄로 세우면 방이 달라도 서로 기다린다. 방 단위 동시성은 방 락(RoomLock)이 맡는다.
+        List<String> synchronizedMethods = Arrays.stream(LobbyService.class.getDeclaredMethods())
+                .filter(method -> Modifier.isSynchronized(method.getModifiers()))
+                .map(Method::getName)
+                .toList();
+
+        assertThat(synchronizedMethods).isEmpty();
+    }
+
+    @Test
+    void 참가할_때_닉네임_조회는_방_락_밖에서_한다() {
+        RoomInfo room = service.createRoom(HOST, MAP, 4);
+        playerService.lockHeldDuringLookup.clear();
+
+        service.join(room.roomId(), P2);
+
+        assertThat(playerService.lockHeldDuringLookup).containsExactly(false);
     }
 }

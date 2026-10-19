@@ -12,6 +12,7 @@ public class InMemoryRoomLock implements RoomLock {
 
     private final List<String> lockedRooms = new ArrayList<>();
     private boolean busy;
+    private boolean held;
 
     @Override
     public <T> T call(String roomId, Supplier<T> action) {
@@ -19,7 +20,17 @@ public class InMemoryRoomLock implements RoomLock {
             throw new GameException(LobbyErrorCode.ROOM_BUSY);
         }
         lockedRooms.add(roomId);
-        return action.get();
+        held = true;
+        try {
+            return action.get();
+        } finally {
+            held = false;
+        }
+    }
+
+    /** 지금 락을 잡고 있는 중인지. action 안에서 부르면 true다. */
+    public boolean isHeld() {
+        return held;
     }
 
     public List<String> lockedRooms() {
