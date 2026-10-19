@@ -19,44 +19,36 @@ public class DocOrderConfig {
 
     /** 문서에 나오는 순서 (명세 표 순서). Redoc은 이 순서 그대로 보여 준다. */
     private static final List<String> DOC_ORDER = List.of(
+            // 오류
+            "/docs/notifications/common-error",
+            "/docs/notifications/lobby-error",
+            "/docs/notifications/game-error",
+            // 로비
+            "/docs/notifications/connected",
+            "/docs/notifications/player-record",
+            "/docs/requests/room-list-request",
+            "/docs/requests/create-room",
+            "/docs/requests/enter-room",
+            // 대기실
+            "/docs/notifications/room-updated",
+            "/docs/requests/room-config-request",
+            "/docs/requests/set-ready",
+            "/docs/requests/start-game",
+            "/docs/requests/leave-room",
+            // 인게임
             "/docs/requests/build",
             "/docs/requests/draw-card",
             "/docs/requests/choose-destination",
             "/docs/requests/roll-dice",
-            "/docs/requests/sell-properties",
-            "/docs/requests/acquire-property",
             "/docs/requests/purchase-property",
+            "/docs/requests/acquire-property",
+            "/docs/requests/sell-properties",
             "/docs/requests/game-state-request",
-            "/docs/notifications/built",
-            "/docs/notifications/card-drawn",
-            "/docs/notifications/destination-chosen",
-            "/docs/notifications/dice-rolled",
-            "/docs/notifications/properties-sold",
-            "/docs/notifications/property-acquired",
-            "/docs/notifications/property-purchased",
-            "/docs/notifications/game-state-sync",
-            "/docs/requests/create-room",
-            "/docs/requests/enter-room",
-            "/docs/requests/leave-room",
-            "/docs/requests/set-ready",
-            "/docs/requests/start-game",
-            "/docs/requests/room-list-request",
-            "/docs/requests/room-config-request",
-            "/docs/requests/chat-send",
-            "/docs/notifications/connected",
-            "/docs/notifications/room-entered",
-            "/docs/notifications/room-left",
-            "/docs/notifications/room-list",
-            "/docs/notifications/player-record",
-            "/docs/notifications/room-updated",
-            "/docs/notifications/game-started",
-            "/docs/notifications/chat-broadcast",
-            "/docs/notifications/common-error",
-            "/docs/notifications/lobby-error",
-            "/docs/notifications/game-error");
+            // 채팅
+            "/docs/requests/chat-send");
 
     /** 문서에서 분류가 나오는 순서. 목록에 없는 분류(로그인 등)는 뒤에 붙는다. */
-    private static final List<String> TAG_ORDER = List.of("게임 요청", "게임 알림", "로비 요청", "로비 알림", "오류 알림");
+    private static final List<String> TAG_ORDER = List.of("오류 알림", "로그인", "로비", "대기실", "인게임", "채팅", "플레이어");
 
 
     /** springdoc이 주소를 정해진 순서 없이 내보내서, 위 순서로 다시 배열한다. 목록에 없는 주소는 뒤에 붙인다. */
@@ -87,6 +79,9 @@ public class DocOrderConfig {
                 }));
                 openApi.setTags(tags);
             }
+
+            // 정렬이 끝난 뒤에 "한눈에 보기" 구간을 만든다. (표가 위 순서를 따른다)
+            DocOverview.apply(openApi);
         };
     }
 }

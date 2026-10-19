@@ -42,6 +42,7 @@ public class ErrorCodeDocConfig {
         LOBBY.put(LobbyErrorCode.INVALID_MAX_PLAYERS, "방장이 보낸 최대 인원이 2~4가 아니거나 지금 방에 있는 사람 수보다 적음");
         LOBBY.put(LobbyErrorCode.INVALID_BOT_COUNT, "방장이 보낸 봇 수가 음수이거나 사람과 봇을 합친 수가 최대 인원을 넘음");
         LOBBY.put(LobbyErrorCode.NOT_ALL_READY, "준비 안 한 사람이 있는데 게임시작");
+        LOBBY.put(LobbyErrorCode.ROOM_BUSY, "같은 방의 다른 요청을 처리하는 중이라 잠시 기다려도 차례가 오지 않음 (방입장·방나가기·준비·방설정변경·게임시작)");
 
         GAME.put(GameErrorCode.INVALID_STATE, "진행 중인 게임이 없거나, 현재 단계(phase)에서 받을 수 없는 요청");
         GAME.put(GameErrorCode.NOT_YOUR_TURN, "내 차례가 아닌데 요청");
