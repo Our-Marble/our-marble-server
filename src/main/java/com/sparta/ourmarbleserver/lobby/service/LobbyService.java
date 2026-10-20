@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.service;
 
+import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.event.GameEndedEvent;
@@ -61,13 +62,15 @@ public class LobbyService {
             throw new GameException(LobbyErrorCode.INVALID_STATE);
         }
         requireNotInAnyRoom(playerId);
-        String nickname = nicknameOf(playerId);   // DB 조회는 락 밖에서
+        PlayerResponse profile = playerService.findMe(playerId);   // DB 조회는 락 밖에서
+        String nickname = nicknameOf(profile);
 
         String roomId = repository.nextRoomId();
         return roomLock.call(roomId, () -> {
             Room room = new Room(roomId, playerId, mapId, maxPlayers);
             room.addMember(playerId, true);
             room.setNickname(playerId, nickname);
+            room.setPortrait(playerId, profile.getPortraitId());
             repository.save(room);
             return toInfo(room);
         });
@@ -136,7 +139,8 @@ public class LobbyService {
      * → 이미 어떤 방에 있음(시작한 방 포함) ALREADY_IN_ROOM → 가득 참 ROOM_FULL.
      */
     public RoomInfo join(String roomId, long playerId) {
-        String nickname = nicknameOf(playerId); // DB 조회는 방 락을 잡기 전에 한다. (락을 쥔 채로 DB를 기다리지 않게)
+        PlayerResponse profile = playerService.findMe(playerId); // DB 조회는 방 락을 잡기 전에 한다. (락을 쥔 채로 DB를 기다리지 않게)
+        String nickname = nicknameOf(profile);
 
         return roomLock.call(roomId, () -> {
             Room room = findRoom(roomId);
@@ -150,6 +154,7 @@ public class LobbyService {
 
             room.addMember(playerId, false);
             room.setNickname(playerId, nickname);
+            room.setPortrait(playerId, profile.getPortraitId());
             repository.save(room);
             return toInfo(room);
         });
@@ -191,13 +196,14 @@ public class LobbyService {
     // ==== ROOM_UPDATED 내용 ====
 
     /**
-     * ROOM_UPDATED 알림 내용을 만든다. 방 상태와 참가자 닉네임을 담는다. 없는 방이면 ROOM_NOT_FOUND.
+     * ROOM_UPDATED 알림 내용을 만든다. 방 상태와 참가자 닉네임, 초상화(사람만)를 담는다. 없는 방이면 ROOM_NOT_FOUND.
      * 알림을 보내는 쪽이 입장, 퇴장, 준비, 방장 변경 뒤에 부른다.
      */
     public RoomUpdatedPayload roomUpdated(String roomId) {
         Room room = findRoom(roomId);
         List<RoomUpdatedPayload.PlayerSnapshot> players = room.memberIds().stream()
-                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id), BotService.isBotId(id)))
+                .map(id -> new RoomUpdatedPayload.PlayerSnapshot(id, room.nicknameOf(id), room.isReady(id), BotService.isBotId(id),
+                        BotService.isBotId(id) ? null : room.portraitOf(id)))
                 .toList();
         return new RoomUpdatedPayload(new RoomUpdatedPayload.RoomSnapshot(
                 room.getRoomId(), room.getHostId(), room.getMapId(), room.getStatus(),
@@ -290,6 +296,37 @@ public class LobbyService {
         });
     }
 
+    // ==== 초상화 ====
+
+    /** 초상화 번호의 범위. 클라이언트에 그림이 8장 있고 번호는 0~7이다. */
+    public static final int MIN_PORTRAIT_ID = 0;
+    public static final int MAX_PORTRAIT_ID = 7;
+
+    /**
+     * 내 초상화를 바꾼다. 번호가 0~7이 아니면 INVALID_PORTRAIT.
+     * 계정(DB)에 저장하고, 방에 들어 있으면 방에 저장된 값도 바꾼다. (게임이 끝나 방이 대기 상태로 돌아왔을 때 새 값이 보이도록)
+     * 방 전원에게 ROOM_UPDATED를 보내야 하는 경우(대기 중인 방에 있음)에만 그 방 id를 돌려준다.
+     * 방에 없거나 게임 중(PLAYING)이면 저장만 하고 empty. (게임 중에는 방 전원에게 알리지 않고, 게임 상태도 바꾸지 않는다)
+     */
+    public Optional<String> setPortrait(long playerId, int portraitId) {
+        if (portraitId < MIN_PORTRAIT_ID || portraitId > MAX_PORTRAIT_ID) {
+            throw new GameException(LobbyErrorCode.INVALID_PORTRAIT);
+        }
+        playerService.updatePortrait(playerId, portraitId);   // DB 저장은 방 락 밖에서
+
+        Optional<String> roomId = repository.findRoomIdByPlayerId(playerId);
+        if (roomId.isEmpty()) {
+            return Optional.empty();
+        }
+        return roomLock.call(roomId.get(), () -> repository.findById(roomId.get())
+                .filter(room -> room.hasMember(playerId))
+                .flatMap(room -> {
+                    room.setPortrait(playerId, portraitId);
+                    repository.save(room);
+                    return room.getStatus() == RoomStatus.WAITING ? Optional.of(room.getRoomId()) : Optional.<String>empty();
+                }));
+    }
+
     /**
      * 방장이 게임을 시작한다.
      * 검증 순서: 시작한 방 ROOM_ALREADY_STARTED → 방장 아님 NOT_HOST
@@ -315,14 +352,17 @@ public class LobbyService {
 
             Map<Long, String> nickNameMap = new HashMap<>();
             Set<Long> botIds = new HashSet<>();
+            Map<Long, Integer> portraitMap = new HashMap<>();   // 시작 시점에 저장돼 있던 값. 고르지 않은 사람과 봇은 없다.
             for (long memberId : room.memberIds()) {
                 nickNameMap.put(memberId, room.nicknameOf(memberId));
                 if (BotService.isBotId(memberId)) {
                     botIds.add(memberId);
+                } else if (room.portraitOf(memberId) != null) {
+                    portraitMap.put(memberId, room.portraitOf(memberId));
                 }
             }
 
-            gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, room.getConfig());
+            gameService.startGame(roomId, room.memberIds(), nickNameMap, botIds, portraitMap, room.getConfig());
             room.setStatus(RoomStatus.PLAYING);
             repository.save(room);
             return toInfo(room);
@@ -429,9 +469,9 @@ public class LobbyService {
                 .orElseThrow(() -> new GameException(LobbyErrorCode.ROOM_NOT_FOUND));
     }
 
-    /** PlayerService에서 닉네임을 읽는다. 없으면 빈 문자열. */
-    private String nicknameOf(long playerId) {
-        String nickname = playerService.findMe(playerId).getNickname();
+    /** 계정 정보에서 닉네임을 꺼낸다. 없으면 빈 문자열. */
+    private static String nicknameOf(PlayerResponse profile) {
+        String nickname = profile.getNickname();
         return nickname == null ? "" : nickname;
     }
 

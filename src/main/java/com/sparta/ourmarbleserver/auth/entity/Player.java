@@ -33,6 +33,10 @@ public class Player {
     @Embedded
     private PlayRecord playRecord;
 
+    /** 고른 초상화 번호(0~7). 고른 적이 없으면 null. */
+    @Column
+    private Integer portraitId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
@@ -42,5 +46,9 @@ public class Player {
         this.password = password;
         this.playRecord = new PlayRecord(nickname);
         this.role = Role.USER;
+    }
+
+    public void changePortrait(int portraitId) {
+        this.portraitId = portraitId;
     }
 }

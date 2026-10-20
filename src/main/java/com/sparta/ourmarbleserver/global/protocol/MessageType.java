@@ -43,9 +43,10 @@ public enum MessageType {
     ROOM_LIST_REQUEST,
     ROOM_CONFIG_REQUEST,
     CHAT_SEND,         // 로비 채팅 보내기
+    SET_PORTRAIT,      // 내 초상화 번호 저장 (0~7)
 
     // ===== 로비: 서버 -> 클라 알림 =====
-    CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname)
+    CONNECTED,         // 본인에게: 접속 완료 (playerId, nickname, portraitId)
     ROOM_ENTERED,      // 본인에게: 방 생성·입장 성공 (대기창 전환 신호)
     ROOM_LEFT,         // 본인에게: 방 나가기 성공
     ROOM_LIST,         // 본인에게: 방목록

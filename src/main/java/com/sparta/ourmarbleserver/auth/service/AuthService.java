@@ -48,7 +48,8 @@ public class AuthService {
         return new PlayerResponse(
                 player.getId(),
                 player.getEmail(),
-                player.getPlayRecord().getNickname()
+                player.getPlayRecord().getNickname(),
+                player.getPortraitId()
         );
     }
 }

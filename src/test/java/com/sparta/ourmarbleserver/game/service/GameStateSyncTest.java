@@ -13,6 +13,7 @@ import com.sparta.ourmarbleserver.game.dto.GameMessage;
 import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload;
 import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload.GameSnapshot;
 import com.sparta.ourmarbleserver.game.dto.GameStateSyncPayload.PropertySnapshot;
+import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameStateRepository;
 import com.sparta.ourmarbleserver.game.state.InMemoryGameStateRepository;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
@@ -101,7 +102,28 @@ class GameStateSyncTest {
         JsonNode player = game.get("playerStates").get(0);
         assertThat(player.has("isBankrupt")).isTrue();
         assertThat(player.has("bankrupt")).isFalse();
-        assertThat(player.has("bot")).isFalse();      // 봇 여부는 클라에 보내지 않는다
+        assertThat(player.get("bot").asBoolean()).isFalse();   // 봇 여부는 재접속한 유저가 봇을 구분하도록 내려 준다
+        assertThat(player.has("portraitId")).isFalse();        // 고르지 않았으면 빠진다
         assertThat(game.get("propertyStates").get(0).get("ownerId").isNull()).isTrue();
+    }
+
+    // ===== 초상화(portraitId)와 봇(bot) =====
+
+    @Test
+    void 플레이어마다_시작할_때_저장된_초상화와_봇_여부가_담긴다() {
+        GameService service = newService();
+        service.startGame(ROOM, List.of(1L, 2L, -1L), Map.of(), Set.of(-1L), Map.of(1L, 4), GameConfig.defaults());
+
+        JsonNode players = JsonMapper.builder().build()
+                .valueToTree(service.syncState(1L).orElseThrow().payload())
+                .get("gameState").get("playerStates");
+
+        assertThat(players.get(0).get("playerId").asLong()).isEqualTo(1L);
+        assertThat(players.get(0).get("portraitId").asInt()).isEqualTo(4);
+        assertThat(players.get(0).get("bot").asBoolean()).isFalse();
+        assertThat(players.get(1).has("portraitId")).isFalse();   // 고르지 않은 사람은 빠진다
+        assertThat(players.get(1).get("bot").asBoolean()).isFalse();
+        assertThat(players.get(2).has("portraitId")).isFalse();   // 봇은 빠진다
+        assertThat(players.get(2).get("bot").asBoolean()).isTrue();
     }
 }

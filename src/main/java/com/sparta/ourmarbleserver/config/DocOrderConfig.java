@@ -33,6 +33,7 @@ public class DocOrderConfig {
             "/docs/notifications/connected",
             "/docs/notifications/player-record",
             "/docs/requests/room-list-request",
+            "/docs/requests/set-portrait",
             "/docs/requests/create-room",
             "/docs/requests/enter-room",
             // 대기실
