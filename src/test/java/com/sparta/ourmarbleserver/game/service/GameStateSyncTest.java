@@ -104,4 +104,39 @@ class GameStateSyncTest {
         assertThat(player.has("bot")).isFalse();      // 봇 여부는 클라에 보내지 않는다
         assertThat(game.get("propertyStates").get(0).get("ownerId").isNull()).isTrue();
     }
+
+    // ===== 방 정보(hostId, maxPlayers) =====
+
+    private JsonNode syncJsonOf(GameService service, long playerId, boolean withRoom) {
+        GameStateSyncPayload payload = (GameStateSyncPayload) service.syncState(playerId).orElseThrow().payload();
+        if (withRoom) {
+            payload = payload.withRoom(7L, 3);
+        }
+        return JsonMapper.builder().build().valueToTree(payload).get("gameState");
+    }
+
+    @Test
+    void 방_정보를_붙이면_gameState_안에_hostId와_maxPlayers가_담긴다() {
+        GameService service = newService();
+        service.startGame(ROOM, List.of(7L, 3L), Map.of(7L, "가"), Set.of());
+
+        JsonNode gameState = syncJsonOf(service, 3L, true);
+
+        assertThat(gameState.get("hostId").asLong()).isEqualTo(7L);
+        assertThat(gameState.get("maxPlayers").asInt()).isEqualTo(3);   // 지금 인원(2)이 아니라 방 설정값
+        assertThat(gameState.get("playerStates")).hasSize(2);           // 기존 필드와 같은 위치
+        assertThat(gameState.get("roomId").asText()).isEqualTo(ROOM);
+    }
+
+    @Test
+    void 방_정보를_붙이지_않으면_두_필드가_JSON에서_빠진다() {
+        GameService service = newService();
+        service.startGame(ROOM, List.of(7L, 3L), Map.of(7L, "가"), Set.of());
+
+        JsonNode gameState = syncJsonOf(service, 3L, false);
+
+        assertThat(gameState.has("hostId")).isFalse();
+        assertThat(gameState.has("maxPlayers")).isFalse();
+        assertThat(gameState.has("phase")).isTrue();   // 나머지는 그대로
+    }
 }
