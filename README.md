@@ -24,6 +24,28 @@ Unity 클라이언트와 WebSocket으로 통신하며, 모든 난수와 게임 �
 | 테스트 | JUnit 5, AssertJ, Mockito |
 | 인프라 | AWS EC2, Docker Compose, GitHub Actions |
 
+## 실행 방법
+
+1. `.env.example`을 복사해 `.env`를 만들고, `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `JWT_SECRET`(`openssl rand -base64 32`로 만든 값)을 채웁니다. 나머지는 로컬 기본값 그대로 씁니다.
+2. 개발용 MySQL(3307), Redis(6379), Mailpit(SMTP 1025, 웹 UI 8025)을 띄웁니다.
+
+   ```
+   docker compose up -d
+   ```
+
+3. 서버를 실행합니다. 기본 프로필이 `local`이라 프로젝트 루트의 `.env`를 자동으로 읽고 8080 포트로 뜹니다. (`SERVER_PORT`로 바꿀 수 있습니다)
+
+   ```
+   ./gradlew bootRun
+   ```
+
+   Windows에서는 `gradlew.bat bootRun`입니다.
+
+4. 확인합니다.
+    - API 문서(Redoc): http://localhost:8080/docs.html
+    - 인증 메일(Mailpit 웹 UI): http://localhost:8025
+    - 상태 확인: http://localhost:8080/actuator/health
+
 ## 아키텍처
 
 클라이언트는 HTTP로 로그인해 JWT를 받고, 그 토큰으로 WebSocket 연결 하나를 열어 끝까지 사용합니다.
@@ -47,7 +69,8 @@ Unity 클라이언트와 WebSocket으로 통신하며, 모든 난수와 게임 �
 
 - 서비스는 `WebSocketSession`을 모릅니다. 알림을 직접 보내지 않고 `GameResult`로 돌려주면 핸들러가 전송합니다.
 - 서비스 요청 함수는 `roomId` 없이 `playerId`만 받습니다. 접속 시 JWT로 확인한 값이라 위조할 수 없습니다.
-- 요청 처리 함수는 `synchronized`로 한 번에 하나씩 처리하고, 서버 사이에서는 Redis 타이머의 리스가 한 방의 요청을 한 곳에서만 처리하게 합니다.
+- 같은 방의 요청이 겹치지 않게 하는 일은 방 단위 락이 합니다. 게임은 Redis 타이머의 방 단위 리스가, 로비는 방 락(`RoomLock`)이 같은 서버의 다른 스레드와 다른 서버를 모두 막습니다. 락을 못 잡은 요청은 거절됩니다(게임 `INVALID_STATE`, 로비 `ROOM_BUSY`). 서비스 전체를 `synchronized`로 잠그지 않아서 다른 방의 요청은 서로 막지 않습니다.
+- 대기방 채팅은 `ChatMessageHandler` → `ChatService`가 맡고, 같은 `MessageRouter`에 등록됩니다.
 
 | 데이터 | 저장 위치 | 이유 |
 | --- | --- | --- |

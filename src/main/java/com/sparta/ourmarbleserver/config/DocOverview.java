@@ -1,6 +1,7 @@
 package com.sparta.ourmarbleserver.config;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,7 +20,7 @@ import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.tags.Tag;
 
 /**
- * Redoc 맨 위의 문서 제목·버전과 "한눈에 보기" 구간을 만든다. 접속과 메시지 형식 두 문단, 분류별로 요청과 알림 type을 모은 짧은 표로 이루어진다.
+ * Redoc 맨 위의 문서 제목·버전과 "한눈에 보기" 구간을 만든다. 접속과 메시지 형식 두 문단, REST API 표(메서드, 경로, 성공, 하는 일), 분류별로 요청과 알림 type을 모은 WebSocket 표로 이루어진다.
  * 표는 서버가 뜰 때 문서 데이터(/docs/ 주소)에서 자동으로 만들어서, 메시지를 추가하면 표에도 저절로 들어간다.
  * 분류 순서는 DocOrderConfig가 정렬한 tags를 따르므로, 그 정렬이 끝난 뒤에 불러야 한다.
  */
@@ -44,6 +45,10 @@ final class DocOverview {
         final Set<String> notifications = new LinkedHashSet<>();
     }
 
+    /** REST API 표의 한 줄. 사진처럼 메서드, 경로, 성공, 하는 일 네 칸이다. tag는 정렬에만 쓴다. */
+    private record RestRow(String tag, String method, String path, String success, String name) {
+    }
+
     private DocOverview() {
     }
 
@@ -60,7 +65,9 @@ final class DocOverview {
         if (current != null && current.contains(TITLE)) {
             return;
         }
-        String text = INTRO + table(groups(openApi));
+        List<RestRow> rest = restRows(openApi);
+        String restSection = rest.isEmpty() ? "" : "**REST API**\n\n" + restTable(rest) + "\n";
+        String text = INTRO + restSection + "**WebSocket**\n\n" + table(groups(openApi));
         info.setDescription(current == null || current.isBlank() ? text : text + "\n\n" + current);
     }
 
@@ -100,6 +107,58 @@ final class DocOverview {
         }
         notificationOwner.forEach((type, tag) -> groups.computeIfAbsent(tag, name -> new Group()).notifications.add(type));
         return groups;
+    }
+
+    /** REST(로그인, 플레이어) 줄을 모은다. 분류 순서는 openApi.getTags()(DocOrderConfig가 정렬함)를 따르고, 분류 목록에 없는 주소는 건너뛴다. */
+    private static List<RestRow> restRows(OpenAPI openApi) {
+        List<RestRow> rows = new ArrayList<>();
+        List<String> tagOrder = new ArrayList<>();
+        if (openApi.getTags() != null) {
+            openApi.getTags().forEach(tag -> tagOrder.add(tag.getName()));
+        }
+        if (openApi.getPaths() == null) {
+            return rows;
+        }
+        for (Map.Entry<String, PathItem> entry : openApi.getPaths().entrySet()) {
+            if (isDocPath(entry.getKey())) {
+                continue;
+            }
+            entry.getValue().readOperationsMap().forEach((method, operation) -> {
+                if (tagOrder.contains(tagOf(operation))) {
+                    rows.add(new RestRow(tagOf(operation), method.name(), entry.getKey(), successCode(operation), operation.getSummary()));
+                }
+            });
+        }
+        // 분류 순서대로 모으되, 같은 분류 안에서는 주소 순서를 그대로 둔다. (정렬은 안정 정렬)
+        rows.sort(Comparator.comparingInt((RestRow row) -> tagOrder.indexOf(row.tag())));
+        return rows;
+    }
+
+    /** 응답 중 처음 나오는 2xx 상태 코드를 "`201`" 모양으로 돌려준다. 없으면 빈 문자열. */
+    private static String successCode(Operation operation) {
+        if (operation.getResponses() != null) {
+            for (String code : operation.getResponses().keySet()) {
+                if (code.startsWith("2")) {
+                    return "`" + code + "`";
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String restTable(List<RestRow> rows) {
+        StringBuilder sb = new StringBuilder("| 메서드 | 경로 | 성공 | 하는 일 |\n| --- | --- | --- | --- |\n");
+        for (RestRow row : rows) {
+            sb.append("| `").append(row.method()).append("` | `").append(row.path()).append("` | ")
+                    .append(row.success().isEmpty() ? "-" : row.success())
+                    .append(" | ").append(cell(row.name())).append(" |\n");
+        }
+        return sb.toString();
+    }
+
+    /** 표 칸 안의 세로선과 줄바꿈은 표를 깨뜨리므로 바꾼다. */
+    private static String cell(String text) {
+        return text == null ? "" : text.replace("|", "\\|").replace('\n', ' ');
     }
 
     private static boolean isDocPath(String path) {
