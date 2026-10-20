@@ -51,11 +51,12 @@ class LobbyServiceTest {
         List<Long> playerIds;
         Map<Long, String> nicknames;
         Set<Long> botIds;
+        Map<Long, Integer> portraits;
         GameConfig config;
         boolean fail;
 
         RecordingGameService() {
-            when(mock.startGame(anyString(), anyList(), anyMap(), anySet(), any(GameConfig.class))).thenAnswer(invocation -> {
+            when(mock.startGame(anyString(), anyList(), anyMap(), anySet(), anyMap(), any(GameConfig.class))).thenAnswer(invocation -> {
                 if (fail) {
                     throw new IllegalStateException("시작 실패");
                 }
@@ -64,7 +65,8 @@ class LobbyServiceTest {
                 playerIds = new ArrayList<>(invocation.<List<Long>>getArgument(1));
                 nicknames = new HashMap<>(invocation.<Map<Long, String>>getArgument(2));
                 botIds = new HashSet<>(invocation.<Set<Long>>getArgument(3));
-                config = invocation.getArgument(4);
+                portraits = new HashMap<>(invocation.<Map<Long, Integer>>getArgument(4));
+                config = invocation.getArgument(5);
                 return null;
             });
         }
@@ -75,6 +77,10 @@ class LobbyServiceTest {
         private final BooleanSupplier lockHeld;
         /** 닉네임을 조회할 때마다 그 순간 방 락을 잡고 있었는지 기록한다. */
         final List<Boolean> lockHeldDuringLookup = new ArrayList<>();
+        /** 계정에 저장된 초상화 번호(playerId → 번호). 고른 적이 없으면 항목이 없다. */
+        final Map<Long, Integer> portraits = new HashMap<>();
+        /** 초상화를 저장할 때마다 그 순간 방 락을 잡고 있었는지 기록한다. */
+        final List<Boolean> lockHeldDuringPortraitSave = new ArrayList<>();
 
         FakePlayerService(BooleanSupplier lockHeld) {
             super(null, null);
@@ -84,7 +90,13 @@ class LobbyServiceTest {
         @Override
         public PlayerResponse findMe(long userId) {
             lockHeldDuringLookup.add(lockHeld.getAsBoolean());
-            return new PlayerResponse(userId, "", "닉" + userId);
+            return new PlayerResponse(userId, "", "닉" + userId, portraits.get(userId));
+        }
+
+        @Override
+        public void updatePortrait(long playerId, int portraitId) {
+            lockHeldDuringPortraitSave.add(lockHeld.getAsBoolean());
+            portraits.put(playerId, portraitId);
         }
     }
 
@@ -1049,5 +1061,105 @@ class LobbyServiceTest {
         service.join(room.roomId(), P2);
 
         assertThat(playerService.lockHeldDuringLookup).containsExactly(false);
+    }
+
+    // ===== 초상화 =====
+
+    private List<RoomUpdatedPayload.PlayerSnapshot> playersOf(String roomId) {
+        return service.roomUpdated(roomId).room().players();
+    }
+
+    @Test
+    void 입장하면_계정에_저장된_초상화가_방에_담기고_고르지_않은_사람은_없다() {
+        playerService.portraits.put(HOST, 5);
+        RoomInfo room = roomWithTwo();   // 2번은 고른 적이 없다
+
+        assertThat(playersOf(room.roomId()))
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::playerId, RoomUpdatedPayload.PlayerSnapshot::portraitId)
+                .containsExactly(Tuple.tuple(HOST, 5), Tuple.tuple(P2, null));
+    }
+
+    @Test
+    void 봇은_초상화가_없고_bot_값은_그대로다() {
+        RoomInfo room = roomWithTwo();
+        service.setRoomConfig(room.roomId(), HOST, GameConfig.defaults(), 4, 1);
+
+        assertThat(playersOf(room.roomId()))
+                .filteredOn(RoomUpdatedPayload.PlayerSnapshot::bot)
+                .hasSize(1)
+                .allMatch(player -> player.portraitId() == null);
+    }
+
+    @Test
+    void 초상화를_바꾸면_계정과_방에_저장하고_대기_중인_방의_id를_돌려준다() {
+        RoomInfo room = roomWithTwo();
+
+        Optional<String> notifyRoom = service.setPortrait(P2, 3);
+
+        assertThat(notifyRoom).contains(room.roomId());   // 호출한 쪽이 이 방 전원에게 ROOM_UPDATED를 보낸다
+        assertThat(playerService.portraits).containsEntry(P2, 3);
+        assertThat(playersOf(room.roomId()))
+                .filteredOn(player -> player.playerId() == P2)
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::portraitId)
+                .containsExactly(3);
+    }
+
+    @Test
+    void 초상화_번호는_0에서_7까지만_받는다() {
+        roomWithTwo();
+
+        assertError(LobbyErrorCode.INVALID_PORTRAIT, () -> service.setPortrait(HOST, -1));
+        assertError(LobbyErrorCode.INVALID_PORTRAIT, () -> service.setPortrait(HOST, 8));
+        assertThat(playerService.portraits).isEmpty();   // 거절하면 아무것도 저장하지 않는다
+
+        service.setPortrait(HOST, 0);
+        service.setPortrait(HOST, 7);
+        assertThat(playerService.portraits).containsEntry(HOST, 7);
+    }
+
+    @Test
+    void 방에_없으면_계정에만_저장하고_알릴_방이_없다() {
+        assertThat(service.setPortrait(HOST, 2)).isEmpty();
+
+        assertThat(playerService.portraits).containsEntry(HOST, 2);
+    }
+
+    @Test
+    void 게임_중인_방에서는_저장만_하고_알리지_않는다() {
+        RoomInfo room = roomWithTwo();
+        service.setPortrait(P2, 1);
+        service.setReady(room.roomId(), P2, true);
+        service.start(room.roomId(), HOST);
+
+        Optional<String> notifyRoom = service.setPortrait(P2, 6);
+
+        assertThat(notifyRoom).isEmpty();                                   // 게임 중에는 방 전원에게 알리지 않는다
+        assertThat(playerService.portraits).containsEntry(P2, 6);           // 계정에는 저장한다
+        assertThat(gameService.portraits).containsEntry(P2, 1);             // 시작 때 넘긴 값은 게임에서 그대로다
+        assertThat(playersOf(room.roomId()))                                // 게임이 끝나 대기방으로 돌아오면 새 값이 보인다
+                .filteredOn(player -> player.playerId() == P2)
+                .extracting(RoomUpdatedPayload.PlayerSnapshot::portraitId)
+                .containsExactly(6);
+    }
+
+    @Test
+    void 초상화를_저장하는_DB_접근은_방_락_밖에서_한다() {
+        roomWithTwo();
+
+        service.setPortrait(HOST, 4);
+
+        assertThat(playerService.lockHeldDuringPortraitSave).containsExactly(false);
+    }
+
+    @Test
+    void 게임을_시작하면_고른_초상화가_startGame에_넘어가고_고르지_않은_사람과_봇은_없다() {
+        playerService.portraits.put(HOST, 4);
+        RoomInfo room = roomWithTwo();   // 2번은 고른 적이 없다
+        service.setRoomConfig(room.roomId(), HOST, GameConfig.defaults(), 4, 1);
+        service.setReady(room.roomId(), P2, true);
+
+        service.start(room.roomId(), HOST);
+
+        assertThat(gameService.portraits).containsOnlyKeys(HOST).containsEntry(HOST, 4);
     }
 }

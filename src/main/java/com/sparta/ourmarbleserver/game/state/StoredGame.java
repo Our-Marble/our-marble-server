@@ -14,7 +14,7 @@ public record StoredGame(String roomId, int turnNumber, int roundNumber, long cu
                          GameConfig config, List<Long> playerOrder, List<Player> players, List<Property> properties) {
 
     public record Player(long playerId, int position, long money, int islandTurnsRemaining, boolean bankrupt,
-                         String nickname, boolean bot, int finalRank) {
+                         String nickname, boolean bot, int finalRank, Integer portraitId) {
     }
 
     public record Property(int propertyId, Long ownerId, BuildingLevel buildingLevel) {
@@ -23,7 +23,7 @@ public record StoredGame(String roomId, int turnNumber, int roundNumber, long cu
     public static StoredGame from(GameState state) {
         List<Player> players = state.players().stream()
                 .map(p -> new Player(p.getPlayerId(), p.getPosition(), p.getMoney(), p.getIslandTurnsRemaining(),
-                        p.isBankrupt(), p.getNickname(), p.isBot(), p.getFinalRank()))
+                        p.isBankrupt(), p.getNickname(), p.isBot(), p.getFinalRank(), p.getPortraitId()))
                 .toList();
         List<Property> properties = state.properties().stream()
                 .map(p -> new Property(p.getPropertyId(), p.getOwnerId(), p.getBuildingLevel()))
@@ -55,6 +55,7 @@ public record StoredGame(String roomId, int turnNumber, int roundNumber, long cu
             player.setNickname(p.nickname());
             player.setBot(p.bot());
             player.setFinalRank(p.finalRank());
+            player.setPortraitId(p.portraitId());
             state.addPlayer(player);
         }
         for (Property p : properties) {

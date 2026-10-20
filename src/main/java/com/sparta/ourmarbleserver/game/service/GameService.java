@@ -113,6 +113,16 @@ public class GameService {
      * 같은 방 번호의 동시 시작은 로비의 start가 그 방의 락 안에서 이 함수를 부르므로 겹치지 않는다.
      */
     public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds, GameConfig config) {
+        return startGame(roomId, playerIds, nicknames, botIds, Map.of(), config);
+    }
+
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. portraits는 playerId → 초상화 번호(0~7)로,
+     * 시작하는 시점의 값을 플레이어 상태에 담아 둔다. portraits에 없는 플레이어(고르지 않은 사람, 봇)는 초상화가 없다.
+     * 나머지는 위 함수와 같다.
+     */
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds,
+                               Map<Long, Integer> portraits, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
@@ -131,6 +141,7 @@ public class GameService {
             player.setMoney(config.startMoney());
             player.setNickname(nicknames.getOrDefault(id, ""));
             player.setBot(botIds.contains(id));
+            player.setPortraitId(portraits.get(id));
             state.addPlayer(player);
         }
         state.setPlayerOrder(playerIds);

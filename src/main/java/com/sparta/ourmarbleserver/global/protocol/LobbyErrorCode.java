@@ -13,7 +13,8 @@ public enum LobbyErrorCode implements ErrorCode {
     NOT_ALL_READY("모두 준비해야 시작할 수 있습니다."),
     INVALID_MAX_PLAYERS("최대 인원은 2~4명이고, 지금 방 사람 수보다 적을 수 없습니다."),
     INVALID_BOT_COUNT("봇 수는 0 이상이고, 사람과 봇을 합쳐 최대 인원 이하여야 합니다."),
-    ROOM_BUSY("방이 다른 요청을 처리하고 있습니다. 잠시 후 다시 시도해 주세요.");
+    ROOM_BUSY("방이 다른 요청을 처리하고 있습니다. 잠시 후 다시 시도해 주세요."),
+    INVALID_PORTRAIT("초상화 번호는 0~7이어야 합니다.");
 
     private final String message;
 

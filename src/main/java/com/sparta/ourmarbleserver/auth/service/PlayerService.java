@@ -28,7 +28,7 @@ public class PlayerService {
         String encodedPassword = passwordEncoder.encode(password);
         Player player = new Player(request.getEmail(), encodedPassword, request.getNickname());
         Player savedUser = playerRepository.save(player);
-        return new PlayerResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getPlayRecord().getNickname());
+        return new PlayerResponse(savedUser.getId(), savedUser.getEmail(), savedUser.getPlayRecord().getNickname(), savedUser.getPortraitId());
     }
 
     @Transactional(readOnly = true)
@@ -37,7 +37,7 @@ public class PlayerService {
     ) {
         Player player = playerRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        return new PlayerResponse(player.getId(), player.getEmail(), player.getPlayRecord().getNickname());
+        return new PlayerResponse(player.getId(), player.getEmail(), player.getPlayRecord().getNickname(), player.getPortraitId());
     }
 
     @Transactional(readOnly = true)
@@ -53,8 +53,16 @@ public class PlayerService {
     public List<PlayerResponse> findAll() {
         List<Player> players = playerRepository.findAll();
         return players.stream()
-                .map(player -> new PlayerResponse(player.getId(), player.getEmail(),player.getPlayRecord().getNickname()))
+                .map(player -> new PlayerResponse(player.getId(), player.getEmail(), player.getPlayRecord().getNickname(), player.getPortraitId()))
                 .toList();
+    }
+
+    /** 계정에 초상화 번호를 저장한다. 범위(0~7) 검사는 호출하는 쪽(LobbyService)이 한다. 없는 계정이면 401. */
+    @Transactional
+    public void updatePortrait(long playerId, int portraitId) {
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        player.changePortrait(portraitId);
     }
 
     @Transactional

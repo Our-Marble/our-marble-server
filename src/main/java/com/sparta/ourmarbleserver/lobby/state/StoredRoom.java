@@ -13,12 +13,16 @@ import java.util.List;
 public record StoredRoom(String roomId, long hostId, int mapId, int maxPlayers,
                          RoomStatus status, GameConfig config, List<Member> members) {
 
-    public record Member(long playerId, String nickname, boolean ready) {
+    public record Member(long playerId, String nickname, boolean ready, Integer portraitId) {
+        /** 초상화 없이 만든다. */
+        public Member(long playerId, String nickname, boolean ready) {
+            this(playerId, nickname, ready, null);
+        }
     }
 
     public static StoredRoom from(Room room) {
         List<Member> members = room.memberIds().stream()
-                .map(id -> new Member(id, room.nicknameOf(id), room.isReady(id)))
+                .map(id -> new Member(id, room.nicknameOf(id), room.isReady(id), room.portraitOf(id)))
                 .toList();
         return new StoredRoom(room.getRoomId(), room.getHostId(), room.getMapId(),
                 room.getMaxPlayers(), room.getStatus(), room.getConfig(), members);
@@ -31,6 +35,7 @@ public record StoredRoom(String roomId, long hostId, int mapId, int maxPlayers,
         for (Member member : members) {
             room.addMember(member.playerId(), member.ready());
             room.setNickname(member.playerId(), member.nickname());
+            room.setPortrait(member.playerId(), member.portraitId());
         }
         return room;
     }

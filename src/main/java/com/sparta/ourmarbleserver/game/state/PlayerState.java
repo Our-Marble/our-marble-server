@@ -25,8 +25,13 @@ public class PlayerState {
      */
     private String nickname = "";
 
-    /** 봇 여부. 봇은 서버에서만 움직이고 클라이언트에는 두지 않는다. */
+    /** 봇 여부. 재접속한 유저가 봇을 구분해 그릴 수 있도록 GAME_STATE_SYNC에도 내려 준다. */
     private boolean bot;
+    /**
+     * 초상화 번호(0~7). 게임을 시작할 때 방에 저장돼 있던 값이고, 게임 중에 바꿔도 반영하지 않는다.
+     * 고르지 않았거나 봇이면 null이다.
+     */
+    private Integer portraitId;
 
     /**
      * 최종 등수. 0이면 아직 정해지지 않음.
