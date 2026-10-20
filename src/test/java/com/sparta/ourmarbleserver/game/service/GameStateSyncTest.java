@@ -125,6 +125,8 @@ class GameStateSyncTest {
         assertThat(players.get(1).get("bot").asBoolean()).isFalse();
         assertThat(players.get(2).has("portraitId")).isFalse();   // 봇은 빠진다
         assertThat(players.get(2).get("bot").asBoolean()).isTrue();
+    }
+
     // ===== 방 정보(hostId, maxPlayers) =====
 
     private JsonNode syncJsonOf(GameService service, long playerId, boolean withRoom) {
