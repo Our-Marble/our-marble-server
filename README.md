@@ -1,8 +1,7 @@
 # 우리의 마블 서버 (our-marble-server)
 
 "모두의 마블"을 모티브로 한 **2~4인 실시간 온라인 보드게임**의 Java/Spring Boot 게임 서버입니다.
-Unity 클라이언트와 WebSocket으로 통신하며, 모든 난수와 게임 판정을 서버가 맡는 **서버 권위(Server Authoritative)** 구조입니다.
-
+[Unity 클라이언트](https://github.com/Our-Marble/our-marble-client)와 WebSocket으로 통신하며, 모든 난수와 게임 판정을 서버가 맡는 **서버 권위(Server Authoritative)** 구조입니다.
 ## 핵심 특징
 
 - **서버 권위 구조**: 주사위, 통행료, 파산, 순위까지 서버가 판정합니다. 클라이언트는 "유저의 선택"만 보내고, 모든 요청은 서버가 다시 검증합니다.
