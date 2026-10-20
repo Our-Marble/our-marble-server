@@ -5,6 +5,7 @@ import com.sparta.ourmarbleserver.game.dto.*;
 import com.sparta.ourmarbleserver.game.service.GameService;
 import com.sparta.ourmarbleserver.global.protocol.MessageType;
 import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
+import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import com.sparta.ourmarbleserver.property.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.bridge.Message;
@@ -20,6 +21,7 @@ import java.util.Set;
 public class GameMessageHandler implements WsMessageHandler{
     private final GameService gameService;
     private final WebSocketMessageSender webSocketMessageSender;
+    private final LobbyService lobbyService;
 
     @Override
     public Set<MessageType> types() {
@@ -75,7 +77,7 @@ public class GameMessageHandler implements WsMessageHandler{
                 if(gameMessage == null)
                     webSocketMessageSender.sendToPlayer(playerId, MessageType.GAME_STATE_SYNC, null);
                 else
-                    webSocketMessageSender.sendToPlayer(playerId, MessageType.GAME_STATE_SYNC, gameMessage.payload());
+                    webSocketMessageSender.sendToPlayer(playerId, MessageType.GAME_STATE_SYNC, withRoomInfo(gameMessage.payload()));
                 return;
             }
             default -> throw new IllegalStateException("GameMessageHandler가 처리하지 않는 request type 입니다. type : " + requestType);
@@ -87,5 +89,14 @@ public class GameMessageHandler implements WsMessageHandler{
             webSocketMessageSender.sendToRoom(roomId, gameMessage.type(), gameMessage.payload());
         }
     }
-}
 
+    // 게임 상태에는 방장과 최대 인원이 없어서, 그 방(로비)에서 읽어 붙인다. 방을 못 찾으면 붙이지 않는다. (클라가 플레이어 수로 대신 표시)
+    private Object withRoomInfo(Object payload) {
+        if (!(payload instanceof GameStateSyncPayload sync)) {
+            return payload;
+        }
+        return lobbyService.findRoomInfo(sync.gameState().roomId())
+                .<Object>map(room -> sync.withRoom(room.hostId(), room.maxPlayers()))
+                .orElse(sync);
+    }
+}

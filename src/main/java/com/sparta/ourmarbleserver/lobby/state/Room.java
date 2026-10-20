@@ -35,6 +35,10 @@ public class Room {
     @Getter(AccessLevel.NONE)
     private final Map<Long, String> nicknames = new HashMap<>();
 
+    /** playerId → 초상화 번호(0~7). 입장할 때 계정에서 읽어 방에 저장해 두고, ROOM_UPDATED를 만들 때 쓴다. 고르지 않았거나 봇이면 항목이 없다. */
+    @Getter(AccessLevel.NONE)
+    private final Map<Long, Integer> portraits = new HashMap<>();
+
     /** 게임 설정. 방장이 바꿀 수 있고, 게임이 시작될 때 startGame에 넘긴다. 맵 번호도 여기에 있다. */
     @Setter
     private GameConfig config;
@@ -74,10 +78,25 @@ public class Room {
 
         members.remove(playerId);
         nicknames.remove(playerId);
+        portraits.remove(playerId);
     }
 
     public void setNickname(long playerId, String nickname) {
         nicknames.put(playerId, nickname);
+    }
+
+    /** 초상화 번호를 저장한다. null이면 지운다. (고르지 않은 상태) */
+    public void setPortrait(long playerId, Integer portraitId) {
+        if (portraitId == null) {
+            portraits.remove(playerId);
+        } else {
+            portraits.put(playerId, portraitId);
+        }
+    }
+
+    /** 저장된 초상화 번호. 없으면 null. */
+    public Integer portraitOf(long playerId) {
+        return portraits.get(playerId);
     }
 
     /** 저장된 닉네임. 없으면 빈 문자열. */

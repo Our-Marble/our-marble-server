@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -13,4 +14,12 @@ public class PlayerResponse {
     private final String email;
     @Schema(description = "닉네임", example = "마블왕")
     private final String nickname;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "고른 초상화 번호(0~7). 고른 적이 없으면 없다.", example = "3", nullable = true)
+    private final Integer portraitId;
+
+    /** 초상화 없이 만든다. (고른 적이 없는 계정) */
+    public PlayerResponse(Long id, String email, String nickname) {
+        this(id, email, nickname, null);
+    }
 }

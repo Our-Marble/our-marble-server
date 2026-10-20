@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.lobby.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.sparta.ourmarbleserver.bot.service.BotService;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
 
@@ -35,12 +36,21 @@ public record RoomUpdatedPayload(RoomSnapshot room) {
         }
     }
 
-    /** 방에 참가한 플레이어. bot이 true면 서버가 대신 움직이는 봇이다. (봇은 항상 ready=true) */
-    public record PlayerSnapshot(long playerId, String nickname, boolean ready, boolean bot) {
+    /**
+     * 방에 참가한 플레이어. bot이 true면 서버가 대신 움직이는 봇이다. (봇은 항상 ready=true)
+     * portraitId는 그 사람이 고른 초상화 번호(0~7)다. 고르지 않았거나 봇이면 이 필드는 빠진다.
+     */
+    public record PlayerSnapshot(long playerId, String nickname, boolean ready, boolean bot,
+                                 @JsonInclude(JsonInclude.Include.NON_NULL) Integer portraitId) {
+
+        /** 초상화 없이 만든다. */
+        public PlayerSnapshot(long playerId, String nickname, boolean ready, boolean bot) {
+            this(playerId, nickname, ready, bot, null);
+        }
 
         /** bot 값을 안 주는 기존 호출용. 번호로 봇인지 정한다. (음수면 봇) */
         public PlayerSnapshot(long playerId, String nickname, boolean ready) {
-            this(playerId, nickname, ready, BotService.isBotId(playerId));
+            this(playerId, nickname, ready, BotService.isBotId(playerId), null);
         }
     }
 }

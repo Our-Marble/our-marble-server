@@ -18,7 +18,7 @@ class EconomyServiceTest {
         long paid = service.paySalary(player, EconomyService.SALARY_AMOUNT);
 
         assertThat(paid).isEqualTo(EconomyService.SALARY_AMOUNT);
-        assertThat(player.getMoney()).isEqualTo(600_000);
+        assertThat(player.getMoney()).isEqualTo(500_000 + EconomyService.SALARY_AMOUNT);   // 직접 정한 현금 500,000 + 월급
     }
 
     @Test

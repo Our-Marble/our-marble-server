@@ -12,6 +12,7 @@ import com.sparta.ourmarbleserver.global.protocol.ErrorPayload;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.PlayerRecordPayload;
 import com.sparta.ourmarbleserver.lobby.dto.RoomListPayload;
+import com.sparta.ourmarbleserver.lobby.dto.SetPortraitRequestPayload;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -58,6 +59,17 @@ public class LobbyDocController {
                     examples = @ExampleObject(name = "INVALID_MESSAGE", summary = "INVALID_MESSAGE", value = DocExamples.COMMON_INVALID_MESSAGE)))
     @PostMapping("/requests/room-list-request")
     public void roomListRequest() {
+    }
+
+    @Operation(summary = "초상화변경", description = "type: SET_PORTRAIT. 내 초상화 번호(0~7)를 계정에 저장한다. 성공해도 요청자에게 따로 응답하지 않으니 클라가 먼저 화면에 반영한다. 대기 중인 방에 있으면 방 전원에게 ROOM_UPDATED가 다시 가서 다른 사람 화면에 바로 반영된다. 방에 없거나 게임 중인 방이면 저장만 하고 ROOM_UPDATED는 가지 않는다. 게임 중에 바꾼 초상화는 진행 중인 게임(GAME_STATE_SYNC)에 반영되지 않는다. 저장한 값은 다음 접속 때 CONNECTED의 portraitId로 돌아온다.")
+    @ApiResponse(responseCode = "200", description = "응답 없음. 대기 중인 방에 있으면 방 전원에게 새 초상화가 담긴 ROOM_UPDATED(players[].portraitId)가 간다.")
+    @ApiResponse(responseCode = "400", description = "오류: LOBBY_ERROR(INVALID_PORTRAIT) (0~7이 아님). portraitId가 없거나 숫자가 아니면 COMMON_ERROR(INVALID_MESSAGE). 거절하면 아무것도 저장하지 않는다.",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorPayload.class),
+                    examples = {
+                            @ExampleObject(name = "INVALID_PORTRAIT", summary = "INVALID_PORTRAIT", value = DocExamples.LOBBY_INVALID_PORTRAIT),
+                            @ExampleObject(name = "INVALID_MESSAGE", summary = "INVALID_MESSAGE", value = DocExamples.COMMON_INVALID_MESSAGE)}))
+    @PostMapping("/requests/set-portrait")
+    public void setPortrait(@RequestBody SetPortraitRequestPayload body) {
     }
 
     @Operation(summary = "방만들기", description = "type: CREATE_ROOM. 대기실을 만든다. 요청 본문은 없다. 맵과 최대 인원은 이 요청에 없다. 만들 때는 기본 맵으로 정해지고, 클라가 이어서 보내는 ROOM_CONFIG_REQUEST로 맵과 최대 인원을 정한다. 만든 사람이 방장이 되고 자동으로 참가한다. 결과는 요청자에게 ROOM_ENTERED, 대기실 전원에게 ROOM_UPDATED 알림으로 간다.\n\n"

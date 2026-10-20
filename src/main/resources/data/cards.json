@@ -2,8 +2,8 @@
   "cards": [
     {
       "id": 0,
-      "name": "무인도",
-      "description": "무인도로 가라",
+      "name": "무인도 표류",
+      "description": "시공의 폭풍에 휩쓸려 무인도에 표류했다.\n옆엔 배구공 ‘왓슨’뿐이다.",
       "effectType": "GoToInspection",
       "amount": 0,
       "targetTileId": 0,
@@ -12,8 +12,8 @@
     },
     {
       "id": 1,
-      "name": "돈 받기",
-      "description": "돈을 받아라",
+      "name": "고객 감사금",
+      "description": "친절한 배달에 감동한 고객이 팁을 지급했다.",
       "effectType": "Bonus",
       "amount": 100000,
       "targetTileId": 0,
@@ -22,8 +22,8 @@
     },
     {
       "id": 2,
-      "name": "패널티",
-      "description": "돈 뺏기기",
+      "name": "세금폭탄",
+      "description": "갑작스런 세무 점검! 추가 세금을 납부한다.",
       "effectType": "Penalty",
       "amount": 100000,
       "targetTileId": 0,
@@ -32,8 +32,8 @@
     },
     {
       "id": 3,
-      "name": "본사 이동",
-      "description": "본사로 이동",
+      "name": "본사 긴급 호출",
+      "description": "본사에서 좋은 소식이 있다며 급히 부른다.",
       "effectType": "MoveTo",
       "amount": 0,
       "targetTileId": 0,
@@ -42,12 +42,22 @@
     },
     {
       "id": 4,
-      "name": "칸 이동",
-      "description": "3칸 뒤로 가라",
+      "name": "손 미끄러짐",
+      "description": "어이쿠— 손이 미끄러져 주사위가 엉뚱하게 굴러갔다.\n3칸 뒤로 간다.",
       "effectType": "MoveBy",
       "amount": 0,
       "targetTileId": 0,
       "steps": -3,
+      "penaltyToFestivalPool": false
+    },
+    {
+      "id": 5,
+      "name": "지름길 발견",
+      "description": "숨겨진 지름길을 찾아 3칸 앞으로 이동한다.",
+      "effectType": "MoveBy",
+      "amount": 0,
+      "targetTileId": 0,
+      "steps": 3,
       "penaltyToFestivalPool": false
     }
   ]

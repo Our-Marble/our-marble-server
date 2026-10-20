@@ -2,6 +2,7 @@ package com.sparta.ourmarbleserver.bot.service;
 
 import com.sparta.ourmarbleserver.game.dto.PropertyData;
 import com.sparta.ourmarbleserver.game.service.GameDataService;
+import com.sparta.ourmarbleserver.game.service.TurnService;
 import com.sparta.ourmarbleserver.game.state.GameState;
 import com.sparta.ourmarbleserver.game.state.PlayerState;
 import com.sparta.ourmarbleserver.game.state.PropertyState;
@@ -85,7 +86,7 @@ class BasicBotStrategyTest {
     void 보통_땅은_남는_현금이_적으면_사지_않지만_막판에는_산다() {
         GameState early = state(16, 150_000, 0);   // 방콕(수익 비율 0.26): 사고 나면 현금 10만이 남는다
         GameState endGame = state(16, 150_000, 0);
-        endGame.setRoundNumber(28);                // 최대 라운드 30에서 남은 라운드 2 (막판)
+        endGame.setRoundNumber(TurnService.MAX_ROUND - 2);   // 최대 라운드에서 남은 라운드 2 (막판)
 
         assertThat(bot.shouldPurchase(early, BOT, 101, 50_000)).isFalse();
         assertThat(bot.shouldPurchase(endGame, BOT, 101, 50_000)).isTrue();

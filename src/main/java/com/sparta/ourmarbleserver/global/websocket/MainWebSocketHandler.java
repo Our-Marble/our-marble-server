@@ -1,5 +1,6 @@
 package com.sparta.ourmarbleserver.global.websocket;
 
+import com.sparta.ourmarbleserver.auth.dto.PlayerResponse;
 import com.sparta.ourmarbleserver.auth.service.PlayerService;
 import com.sparta.ourmarbleserver.global.exception.GameException;
 import com.sparta.ourmarbleserver.global.protocol.*;
@@ -49,10 +50,10 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
         long playerId = playerIdOf(session);
         log.info("[WS] 연결: player={} session={}", playerId, session.getId());
 
-        // nickname 찾기
-        String nickname;
+        // nickname, 초상화 찾기
+        PlayerResponse me;
         try {
-            nickname = playerService.findMe(playerId).getNickname();
+            me = playerService.findMe(playerId);
         } catch (ResponseStatusException e) {
             // 토큰은 유효하지만 회원이 없음 (탈퇴 등) > 연결 거부
             log.info("[WS] 연결 거부: 회원 없음 player={}", playerId);
@@ -62,7 +63,7 @@ public class MainWebSocketHandler extends TextWebSocketHandler {
 
         sessionRegistry.register(playerId, session);    // 등록 먼저
 
-        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, nickname)); // 연결 완료 알림
+        sender.sendToPlayer(playerId, MessageType.CONNECTED, new ConnectedPayload(playerId, me.getNickname(), me.getPortraitId())); // 연결 완료 알림
 
         // 게임이 끝나 대기방으로 돌아간 방에 남아 있었다면 정리하고 로비로 보낸다
         lobbyService.leaveWaitingRoom(playerId)

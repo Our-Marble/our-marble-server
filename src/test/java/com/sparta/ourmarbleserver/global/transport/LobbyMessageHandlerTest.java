@@ -136,4 +136,46 @@ class LobbyMessageHandlerTest {
         body.put("botCount", botCount);
         return body;
     }
+
+    // ===== 초상화 (SET_PORTRAIT) =====
+
+    @Test
+    void 대기_중인_방에서_초상화를_바꾸면_방_전원에게_ROOM_UPDATED를_보낸다() {
+        when(lobbyService.setPortrait(1L, 3)).thenReturn(java.util.Optional.of("r_1"));
+        when(lobbyService.roomUpdated("r_1")).thenReturn(updated);
+
+        handler.handle(MessageType.SET_PORTRAIT, 1L, objectMapper.createObjectNode().put("portraitId", 3));
+
+        verify(sender).sendToRoom("r_1", MessageType.ROOM_UPDATED, updated);
+        verify(sender, never()).sendToPlayer(anyLong(), any(), any());   // 요청자에게 따로 응답하지 않는다
+    }
+
+    @Test
+    void 방에_없거나_게임_중이면_저장만_하고_아무에게도_보내지_않는다() {
+        when(lobbyService.setPortrait(1L, 3)).thenReturn(java.util.Optional.empty());
+
+        handler.handle(MessageType.SET_PORTRAIT, 1L, objectMapper.createObjectNode().put("portraitId", 3));
+
+        verify(lobbyService).setPortrait(1L, 3);
+        verify(sender, never()).sendToRoom(anyString(), any(), any());
+        verify(sender, never()).sendToPlayer(anyLong(), any(), any());
+    }
+
+    @Test
+    void 번호가_범위_밖이면_서비스의_INVALID_PORTRAIT_오류가_그대로_올라간다() {
+        when(lobbyService.setPortrait(1L, 8)).thenThrow(new GameException(LobbyErrorCode.INVALID_PORTRAIT));
+
+        assertThatThrownBy(() -> handler.handle(MessageType.SET_PORTRAIT, 1L, objectMapper.createObjectNode().put("portraitId", 8)))
+                .isInstanceOfSatisfying(GameException.class,
+                        e -> assertThat(e.code()).isEqualTo(LobbyErrorCode.INVALID_PORTRAIT));
+        verify(sender, never()).sendToRoom(anyString(), any(), any());
+    }
+
+    @Test
+    void 번호가_없으면_INVALID_MESSAGE() {
+        assertThatThrownBy(() -> handler.handle(MessageType.SET_PORTRAIT, 1L, objectMapper.createObjectNode()))
+                .isInstanceOfSatisfying(GameException.class,
+                        e -> assertThat(e.code()).isEqualTo(CommonErrorCode.INVALID_MESSAGE));
+        verify(lobbyService, never()).setPortrait(anyLong(), anyInt());
+    }
 }

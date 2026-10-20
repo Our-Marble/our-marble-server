@@ -7,6 +7,7 @@ import com.sparta.ourmarbleserver.global.websocket.WebSocketMessageSender;
 import com.sparta.ourmarbleserver.lobby.dto.EnterRoomRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.GameStartedPayload;
 import com.sparta.ourmarbleserver.lobby.dto.RoomConfigRequestPayload;
+import com.sparta.ourmarbleserver.lobby.dto.SetPortraitRequestPayload;
 import com.sparta.ourmarbleserver.lobby.dto.SetReadyRequestPayload;
 import com.sparta.ourmarbleserver.lobby.service.LobbyService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,8 @@ public class LobbyMessageHandler implements WsMessageHandler {
                 MessageType.SET_READY,
                 MessageType.START_GAME,
                 MessageType.ROOM_LIST_REQUEST,
-                MessageType.ROOM_CONFIG_REQUEST
+                MessageType.ROOM_CONFIG_REQUEST,
+                MessageType.SET_PORTRAIT
         );
     }
 
@@ -48,6 +50,7 @@ public class LobbyMessageHandler implements WsMessageHandler {
             case START_GAME -> startGame(playerId);
             case ROOM_LIST_REQUEST -> lobbyScreenSender.send(playerId); // 방 목록은 자동으로 보내지 않는다. 로비 화면은 접속할 때와 새로고침(ROOM_LIST_REQUEST)할 때만 목록을 받는다.
             case ROOM_CONFIG_REQUEST -> setRoomConfig(playerId, objectMapper.treeToValue(payload, RoomConfigRequestPayload.class));
+            case SET_PORTRAIT -> setPortrait(playerId, objectMapper.treeToValue(payload, SetPortraitRequestPayload.class));
             default -> throw new IllegalStateException("LobbyMessageHandler가 처리하지 않는 type: " + type);
         }
     }
@@ -93,6 +96,16 @@ public class LobbyMessageHandler implements WsMessageHandler {
         String roomId = lobbyService.roomIdOf(playerId);   // 방에 없으면 NOT_IN_ROOM
         lobbyService.setRoomConfig(roomId, playerId, request.config(), request.maxPlayers(), request.botCount());
         sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId));
+    }
+
+    // 초상화 번호를 저장한다. 성공해도 요청자에게 따로 응답하지 않는다. (클라이언트가 먼저 화면에 반영한다)
+    // 대기 중인 방에 있으면 방 전원에게 ROOM_UPDATED를 다시 보내 다른 사람 화면에도 바로 반영한다. (게임 중이면 저장만 한다)
+    private void setPortrait(long playerId, SetPortraitRequestPayload request) {
+        if (request.portraitId() == null) {
+            throw new GameException(CommonErrorCode.INVALID_MESSAGE);
+        }
+        lobbyService.setPortrait(playerId, request.portraitId())
+                .ifPresent(roomId -> sender.sendToRoom(roomId, MessageType.ROOM_UPDATED, lobbyService.roomUpdated(roomId)));
     }
 
     private void startGame(long playerId) {

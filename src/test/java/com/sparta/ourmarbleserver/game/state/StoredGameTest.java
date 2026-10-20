@@ -33,6 +33,7 @@ class StoredGameTest {
         p1.setBankrupt(true);
         p1.setNickname("철수");
         p1.setFinalRank(2);
+        p1.setPortraitId(6);   // 고른 초상화. p2(봇)는 없음(null)
         original.addPlayer(p1);
 
         PlayerState p2 = new PlayerState(2L);

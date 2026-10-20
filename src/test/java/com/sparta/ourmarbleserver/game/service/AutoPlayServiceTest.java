@@ -88,7 +88,7 @@ class AutoPlayServiceTest {
         assertThat(state.getPropertyState(105).orElseThrow().hasOwner()).isFalse();
         assertThat(state.getPropertyState(106).orElseThrow().isOwnedBy(1L)).isTrue();       // 나머지는 지킨다
         assertThat(state.getPlayerState(1L).getMoney()).isZero();                           // 10,000 + 50,000 - 60,000
-        assertThat(state.getPlayerState(2L).getMoney()).isEqualTo(500_000 + 60_000);
+        assertThat(state.getPlayerState(2L).getMoney()).isEqualTo(GameService.START_MONEY + 60_000);
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTIES_SOLD), any());
     }
 
@@ -99,7 +99,7 @@ class AutoPlayServiceTest {
 
         autoPlay.onTimeout(ROOM);
 
-        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(500_000 + 100_000);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY + 100_000);
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.CARD_DRAWN), any());
     }
 
@@ -129,7 +129,7 @@ class AutoPlayServiceTest {
         autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
-        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - 200_000);   // 땅값 20만
         verify(sender).sendToRoom(eq(ROOM), eq(MessageType.PROPERTY_PURCHASED), any());
     }
 
@@ -154,7 +154,7 @@ class AutoPlayServiceTest {
         autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(131).orElseThrow().getBuildingLevel()).isEqualTo(BuildingLevel.VILLA);
-        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(350_000);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - 150_000);   // 서울 별장 건설비 15만
     }
 
     @Test
@@ -233,7 +233,7 @@ class AutoPlayServiceTest {
         autoPlay.onTimeout(ROOM);
 
         assertThat(state.getPropertyState(104).orElseThrow().isOwnedBy(1L)).isTrue();
-        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(300_000);
+        assertThat(state.getPlayerState(1L).getMoney()).isEqualTo(GameService.START_MONEY - 200_000);   // 땅값 20만
     }
 
     @Test

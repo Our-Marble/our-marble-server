@@ -28,7 +28,10 @@ import java.util.*;
  * (클라 RollDice → HandleDiceRolled → ProcessArrival 흐름)
  * 요청 type 분류와 요청 본문 읽기는 하지 않는다. MessageRouter가 type별로 아래 함수를 직접 호출한다.
  * 요청 처리 함수: rollDice, purchaseProperty, sellProperties, build, acquireProperty, chooseDestination, drawCard
- * 요청 처리 함수는 synchronized로 한 번에 하나씩 처리한다. (같은 요청이 겹치면 상태가 꼬이므로, startGame은 새 방이라 제외)
+ * 같은 방의 요청이 겹치지 않게 하는 일은 TimerService의 방 단위 리스가 한다. (validate에서 Redis Lua로 잡고, 저장도 리스 주인일 때만 Lua 하나로 한다)
+ * 리스는 요청마다 새 토큰으로 잡으므로 다른 서버뿐 아니라 같은 서버의 다른 스레드도 막는다. 리스를 못 잡은 요청은 기다리지 않고 INVALID_STATE로 거절된다.
+ * 그래서 요청 처리 함수에 synchronized를 걸지 않는다. (예전에는 걸어서 서로 다른 방의 요청까지 서버 안에서 한 줄로 처리됐다)
+ * 타이머 없이 만든 구성(일부 단위 테스트)에서는 동시 요청을 막지 않는다.
  * 요청은 roomId를 받지 않고, playerId로 그 플레이어가 속한 진행 중인 게임을 찾는다.
  * 도착 칸 처리(통행료 정산, 파산)는 ArrivalService가 하고, 이 클래스를 거쳐서만 불린다.
  * 카드 효과 적용은 CardService가 하고, 이 클래스를 거쳐서만 불린다.
@@ -107,12 +110,19 @@ public class GameService {
      * nicknames에 없는 플레이어의 닉네임은 빈 문자열이고, botIds에 든 플레이어는 봇이다.
      * 플레이어 목록이 비었거나 중복이거나 2~4명이 아니면 IllegalArgumentException,
      * 같은 방 번호로 진행 중인 게임이 이미 있으면 IllegalStateException.
-     * synchronized를 붙이지 않는다. 요청 처리 함수는 서비스 락을 잡은 채 save()에서 종료 이벤트를 내보내고,
-     * 그 이벤트를 받는 LobbyService.onGameEnded는 로비 락을 기다린다. 반대로 LobbyService.start는 로비 락을 잡은 채
-     * 이 함수를 부른다. 여기에 서비스 락을 걸면 두 락이 서로를 기다려 교착이 생긴다.
-     * (같은 방 번호의 동시 시작은 로비의 start가 이미 직렬화한다)
+     * 같은 방 번호의 동시 시작은 로비의 start가 그 방의 락 안에서 이 함수를 부르므로 겹치지 않는다.
      */
     public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds, GameConfig config) {
+        return startGame(roomId, playerIds, nicknames, botIds, Map.of(), config);
+    }
+
+    /**
+     * 방 상태를 만들고 첫 플레이어의 턴을 시작한다. portraits는 playerId → 초상화 번호(0~7)로,
+     * 시작하는 시점의 값을 플레이어 상태에 담아 둔다. portraits에 없는 플레이어(고르지 않은 사람, 봇)는 초상화가 없다.
+     * 나머지는 위 함수와 같다.
+     */
+    public GameState startGame(String roomId, List<Long> playerIds, Map<Long, String> nicknames, Set<Long> botIds,
+                               Map<Long, Integer> portraits, GameConfig config) {
         if (playerIds.isEmpty() || new HashSet<>(playerIds).size() != playerIds.size()) {
             throw new IllegalArgumentException("플레이어 목록이 비었거나 중복이 있습니다." + playerIds);
         }
@@ -131,6 +141,7 @@ public class GameService {
             player.setMoney(config.startMoney());
             player.setNickname(nicknames.getOrDefault(id, ""));
             player.setBot(botIds.contains(id));
+            player.setPortraitId(portraits.get(id));
             state.addPlayer(player);
         }
         state.setPlayerOrder(playerIds);
@@ -150,7 +161,7 @@ public class GameService {
      * 알림은 DICE_ROLLED 하나만 나간다. 이동과 월급은 클라가 같은 규칙으로 계산한다.
      * 무인도 영업정지 중이면 더블이 아닐 때 이동 없이 턴이 넘어가고, 3연속 더블이면 무인도로 간다.
      */
-    public synchronized GameResult rollDice(long playerId) {
+    public GameResult rollDice(long playerId) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_ROLL);
             PlayerState player = state.getPlayerState(playerId);
@@ -197,7 +208,7 @@ public class GameService {
      * 구매: 빈 땅 → 현금 확인 → 땅값 차감 → 주인 등록. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
 
-    public synchronized GameResult purchaseProperty(long playerId, int propertyId, boolean isAccept) {
+    public GameResult purchaseProperty(long playerId, int propertyId, boolean isAccept) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_PURCHASE, propertyId);
             PlayerState player = state.getPlayerState(playerId);
@@ -220,7 +231,7 @@ public class GameService {
      * 검증 순서: 목록이 null이거나 비었거나 null 값이 있거나 중복(INVALID_PROPERTY_LIST) → 없는 땅(INVALID_PROPERTY) → 내 땅 아님(NOT_OWNER)
      * → 현금 + 매각가 합계 < 통행료(NOT_ENOUGH_SELL). 땅은 주인 없음 + 건설 단계 0으로 초기화된다.
      */
-    public synchronized GameResult sellProperties(long playerId, List<Integer> propertyIds) {
+    public GameResult sellProperties(long playerId, List<Integer> propertyIds) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_SELL);
             PlayerState payer = state.getPlayerState(playerId);
@@ -244,7 +255,7 @@ public class GameService {
      * 건설 검증: 내 땅(NOT_OWNER) → 건설 가능 땅(CANNOT_BUILD) → 호텔 아님(MAX_LEVEL) → 현금 ≥ 건설비(NOT_ENOUGH_MONEY).
      * 건물은 한 단계씩 올라가고 건설비는 올라갈 단계의 비용이다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public synchronized GameResult build(long playerId, int propertyId, boolean isAccept) {
+    public GameResult build(long playerId, int propertyId, boolean isAccept) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_BUILD, propertyId);
             PlayerState player = state.getPlayerState(playerId);
@@ -268,7 +279,7 @@ public class GameService {
      * 인수 검증: 남의 땅(CANNOT_ACQUIRE) → 현금 ≥ 인수가(NOT_ENOUGH_MONEY). 인수가는 이전 주인에게 이체하고
      * 건물 단계는 그대로 둔 채 주인만 바꾼다. 거절은 상태 변화 없이 isAccept=false로 알린다.
      */
-    public synchronized GameResult acquireProperty(long playerId, int propertyId, boolean isAccept) {
+    public GameResult acquireProperty(long playerId, int propertyId, boolean isAccept) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_ACQUIRE, propertyId);
             PlayerState player = state.getPlayerState(playerId);
@@ -291,7 +302,7 @@ public class GameService {
      * 세계여행 칸에서 시작한 턴에 목적지를 골라 이동하고(출발 지점을 지나면 월급), 도착한 칸을 처리한다.
      * DESTINATION_CHOSEN을 방 전원에게 보낸다. 목적지는 보드 안의 칸이면 세계여행 칸을 뺀 어디든 고를 수 있다.
      */
-    public synchronized GameResult chooseDestination(long playerId, int destinationPosition) {
+    public GameResult chooseDestination(long playerId, int destinationPosition) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_DESTINATION);
             PlayerState player = state.getPlayerState(playerId);
@@ -325,7 +336,7 @@ public class GameService {
      * 황금열쇠 칸에서 카드를 한 장 뽑아 효과를 적용한다. CARD_DRAWN을 방 전원에게 보낸다.
      * 카드는 매번 전체에서 무작위로 고른다. (클라 DrawCard와 같음, 장수나 사용 여부는 보지 않는다)
      */
-    public synchronized GameResult drawCard(long playerId) {
+    public GameResult drawCard(long playerId) {
         try {
             GameState state = validate(playerId, TurnPhase.AWAITING_DRAW_CARD);
             PlayerState player = state.getPlayerState(playerId);
@@ -352,10 +363,10 @@ public class GameService {
 
     /**
      * 플레이어가 속한 진행 중인 게임의 현재 상태 전체를 GAME_STATE_SYNC 알림으로 만든다. (재접속 때 화면 복구용)
-     * 상태를 바꾸지 않는다. 요청 처리와 같은 락을 잡아서, 요청이 처리되는 도중의 상태를 읽지 않는다.
+     * 상태를 바꾸지 않는다. 상태는 리스 주인이 Lua 하나로 통째로 저장하므로, 요청 처리 도중의 반쪽 상태를 읽는 일은 없다. (직전 또는 직후 상태를 읽는다)
      * 속한 진행 중인 게임이 없으면(로비에 있는 사람 등) 빈 값을 돌려준다.
      */
-    public synchronized Optional<GameMessage> syncState(long playerId) {
+    public Optional<GameMessage> syncState(long playerId) {
         return repository.findByPlayerId(playerId).map(state -> {
             if (timerService != null) {
                 timerService.release(state.getRoomId(), playerId);   // 재접속한 사람은 AFK를 푼다
@@ -396,7 +407,7 @@ public class GameService {
 
     /**
      * 게임이 끝나면(GameEndedEvent) 그 방의 게임 상태를 지운다. 결과 화면은 클라가 처리하므로 서버는 상태를 남기지 않는다.
-     * save()가 요청 처리 락을 잡은 채 이벤트를 내보내서 이 함수도 같은 스레드에서 불린다. 락은 따로 걸지 않는다.
+     * save()가 요청 처리 스레드에서 이벤트를 내보내므로 이 함수도 같은 스레드에서 불린다.
      * (방은 로비가 WAITING으로 되돌린다)
      */
     @EventListener
