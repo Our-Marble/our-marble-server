@@ -154,7 +154,7 @@ public class GameDocController {
 
     @Operation(summary = "게임상태요청", description = "type: GAME_STATE_REQUEST. 재접속했을 때 현재 게임 상태를 요청한다. 요청 본문은 없다. 결과는 GAME_STATE_SYNC 알림으로 요청자에게만 간다. 재접속한 사람의 AFK 상태(자동 진행)는 이때 풀린다.\n\n"
             + "진행 중인 게임이 없으면(대기실에 있는 사람 등) payload가 없는 GAME_STATE_SYNC가 간다.")
-    @ApiResponse(responseCode = "200", description = "**GAME_STATE_SYNC** — 재접속한 요청자에게만 현재 게임 상태 전체를 보낸다. 진행 중인 게임이 없으면 payload 없이 type만 간다. phase는 서버가 기다리는 입력(TurnPhase 이름), finalRank 0은 등수 미정, buildingLevel은 0(땅)~3(호텔), ownerId가 null이면 주인 없음",
+    @ApiResponse(responseCode = "200", description = "**GAME_STATE_SYNC** — 재접속한 요청자에게만 현재 게임 상태 전체를 보낸다. 진행 중인 게임이 없으면 payload 없이 type만 간다. hostId는 방장의 playerId, maxPlayers는 방을 만들 때 정한 최대 인원이다(지금 인원이 아님). 방 정보를 읽지 못하면 두 필드는 빠진다. phase는 서버가 기다리는 입력(TurnPhase 이름), finalRank 0은 등수 미정, buildingLevel은 0(땅)~3(호텔), ownerId가 null이면 주인 없음",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = GameStateSyncPayload.class),
                     examples = @ExampleObject(name = "GAME_STATE_SYNC", summary = "GAME_STATE_SYNC", value = DocExamples.GAME_STATE_SYNC)))
     @ApiResponse(responseCode = "400", description = "이 요청에는 요청 내용 때문에 거절되는 경우가 없다. 메시지 형식이 틀리면 COMMON_ERROR(INVALID_MESSAGE)가 요청자에게만 간다.",
