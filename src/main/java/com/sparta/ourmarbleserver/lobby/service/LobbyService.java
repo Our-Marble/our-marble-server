@@ -96,11 +96,6 @@ public class LobbyService {
         return toInfo(findRoom(roomId));
     }
 
-    /** 방 한 개 조회. 없으면 empty. (게임 상태에 방 정보를 붙일 때처럼 방이 없어도 넘어갈 수 있을 때 쓴다) */
-    public Optional<RoomInfo> findRoomInfo(String roomId) {
-        return repository.findById(roomId).map(this::toInfo);
-    }
-
     /**
      * 이 플레이어가 들어 있는 방 id. 어느 방에도 없으면 NOT_IN_ROOM.
      * 요청에는 roomId가 실리지 않아서(LEAVE_ROOM, SET_READY, START_GAME) 요청한 사람의 방을 이걸로 찾는다.

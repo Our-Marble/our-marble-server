@@ -1,6 +1,5 @@
 package com.sparta.ourmarbleserver.game.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sparta.ourmarbleserver.game.state.GameConfig;
 import com.sparta.ourmarbleserver.game.state.GameState;
@@ -29,34 +28,18 @@ public record GameStateSyncPayload(GameSnapshot gameState) {
                         property.getBuildingLevel().index()))
                 .toList();
         return new GameStateSyncPayload(new GameSnapshot(
-                state.getRoomId(), null, null, state.getTurnNumber(), state.getRoundNumber(), state.getCurrentPlayerId(),
+                state.getRoomId(), state.getTurnNumber(), state.getRoundNumber(), state.getCurrentPlayerId(),
                 state.getWelfareFund(), state.getPhase().name(), state.isDouble(), state.getConsecutiveDoubleCount(),
                 state.playerOrder(), players, properties, state.getConfig()));
     }
 
     /**
-     * 방 정보(방장, 최대 인원)를 채운 알림 내용을 돌려준다. 게임 상태에는 방 정보가 없어서 로비의 방에서 읽어 붙인다.
-     * 방 정보를 붙이지 않으면 두 필드는 JSON에서 빠지고, 클라는 플레이어 수로 대신 표시한다.
-     */
-    public GameStateSyncPayload withRoom(long hostId, int maxPlayers) {
-        GameSnapshot s = gameState;
-        return new GameStateSyncPayload(new GameSnapshot(
-                s.roomId(), hostId, maxPlayers, s.turnNumber(), s.roundNumber(), s.currentPlayerId(),
-                s.welfareFund(), s.phase(), s.isDouble(), s.consecutiveDoubleCount(),
-                s.playerOrder(), s.playerStates(), s.propertyStates(), s.config()));
-    }
-
-    /**
      * 게임 상태 전체.
      * phase는 서버가 기다리는 입력(TurnPhase 이름)이고, 클라는 이 값으로 띄울 선택창을 정한다.
-     * hostId는 방장의 playerId, maxPlayers는 방을 만들 때 정한 최대 인원이다. (지금 인원이 아니다)
-     * 방 정보를 읽지 못하면 두 필드는 JSON에서 빠진다.
      * playerOrder는 턴 순서, config는 이 게임의 규칙 설정(초기 자금, 월급, 세금, 최대 라운드, 무인도 영업정지 턴, 맵 번호)이다.
      */
     public record GameSnapshot(
             String roomId,
-            @JsonInclude(JsonInclude.Include.NON_NULL) Long hostId,
-            @JsonInclude(JsonInclude.Include.NON_NULL) Integer maxPlayers,
             int turnNumber,
             int roundNumber,
             long currentPlayerId,
